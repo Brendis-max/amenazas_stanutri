@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "452503015485",
+    "project_id": "starnutri-f9b6f",
+    "storage_bucket": "starnutri-f9b6f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:452503015485:android:db68cf33377de414c0da54",
+        "android_client_info": {
+          "package_name": "com.example.starnutri"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "452503015485-gamfiim9p3aas4qqfc15k839c61g8iv6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.starnutri",
+            "certificate_hash": "4e78f918c9cbe25cd81cf962824a38c92c42742a"
+          }
+        },
+        {
+          "client_id": "452503015485-fhbcaqqt4rchha7j5ps61q63sri98df4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0N8Ww3ufzePEijEg854rTIctQJAw7IM4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "452503015485-fhbcaqqt4rchha7j5ps61q63sri98df4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "452503015485-5eof8u5q55llhp5ojjv55p4tjnhcv0h9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.starnutri"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
