@@ -61,7 +61,7 @@ class _HomeTabsState extends State<HomeTabs> {
           unselectedItemColor: Colors.black38,
           showSelectedLabels: false,
           showUnselectedLabels: false,
-          elevation: 0, // Quitamos la sombra nativa para usar la del Container
+          elevation: 0, // Quitamos la sombra nativa para usar la del container
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Inicio"),
             BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: "Stats"),
