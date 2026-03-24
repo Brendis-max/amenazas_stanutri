@@ -54,7 +54,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
       );
       final int edadLimpia = int.parse(_ageController.text);
 
-      // Verificación de longitud extra por seguridad (Punto 1 del documento)
+      // Verificación de longitud extra por seguridad 
       if (nombreLimpio.length >= 3 && nombreLimpio.length <= 20) {
         await FirebaseFirestore.instance
             .collection('users')

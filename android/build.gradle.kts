@@ -1,12 +1,22 @@
-buildscript {
+allprojects {
     repositories {
         google()
         mavenCentral()
     }
-    dependencies {
-        // Solo dejamos el de google-services aquí si el plugin del settings no lo toma
-        classpath("com.google.gms:google-services:4.4.2")
-    }
+}
+
+val newBuildDir: Directory =
+    rootProject.layout.buildDirectory
+        .dir("../../build")
+        .get()
+rootProject.layout.buildDirectory.value(newBuildDir)
+
+subprojects {
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
+}
+subprojects {
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {

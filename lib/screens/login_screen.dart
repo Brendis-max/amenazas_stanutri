@@ -1,3 +1,5 @@
+import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
@@ -11,208 +13,570 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final AuthService auth = AuthService();
-  final emailController = TextEditingController();
-  final passController = TextEditingController();
-  final formKey = GlobalKey<FormState>();
-  bool isLoading = false;
+class _LoginScreenState extends State<LoginScreen>
+    with TickerProviderStateMixin {
 
-  // ----------- SEGURIDAD BÁSICA -----------
-  String sanitizeInput(String input) {
-    return input.trim().replaceAll(RegExp(r'[<>{}\[\]\\|^`"~]'), '');
-  }
-  
-  bool isValidEmail(String email) {
-    return RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email);
-  }
+  // ─── Controladores ────────────────────────────────────────────────────────
+  late AnimationController _bgController;
+  late AnimationController _floatController;
+  late AnimationController _entryController;
+  late Animation<Offset>   _cardSlide;
+  late Animation<double>   _cardFade;
 
-  // ----------- NAVEGACIÓN DIRECTA -----------
-  void goSelection() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ProfileSelectionPage()),
+  // ─── Form ─────────────────────────────────────────────────────────────────
+  final AuthService   auth            = AuthService();
+  final emailController               = TextEditingController();
+  final passController                = TextEditingController();
+  final formKey                       = GlobalKey<FormState>();
+  bool  isLoading                     = false;
+  bool  _obscurePass                  = true;
+
+  // ─── Datos visuales ───────────────────────────────────────────────────────
+  final List<String> _emojis = [
+    "⭐","🍎","🍌","🥕","🥦","🍊","🍇","🍓","🍒","🍍",
+    "🥝","🍐","🥑","🍉","🍋","⭐","🍎","🥕","🍊","🍇",
+  ];
+
+  final List<Color> _dotColors = const [
+    Color(0xFFFF6BA1), Color(0xFF7C3AED), Color(0xFF5DCCFF),
+    Color(0xFFFF8C42), Color(0xFF4ECB71), Color(0xFFFFD166),
+    Color(0xFFEF476F), Color(0xFF06D6A0), Color(0xFF118AB2),
+    Color(0xFFFFB347), Color(0xFFC77DFF), Color(0xFF80ED99),
+    Color(0xFFF4A261), Color(0xFF2EC4B6), Color(0xFFE76F51),
+  ];
+
+  late final List<_FloatingEmoji> _emojiData;
+  late final List<_Dot>           _dotData;
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+
+    _bgController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 24),
+    )..repeat();
+
+    _floatController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
     );
+
+    _cardSlide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+
+    _cardFade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _entryController, curve: const Interval(0, 0.7)));
+
+    _entryController.forward();
+
+    final rnd = Random();
+
+    _emojiData = List.generate(20, (i) {
+      final r = Random(i * 31 + 7);
+      return _FloatingEmoji(
+        emoji:   _emojis[i % _emojis.length],
+        xFactor: r.nextDouble(),
+        yFactor: r.nextDouble(),          // toda la pantalla
+        size:    20 + r.nextDouble() * 14,
+        phase:   rnd.nextDouble() * 2 * pi,
+      );
+    });
+
+    _dotData = List.generate(40, (i) {
+      final r = Random(i * 17 + 3);
+      return _Dot(
+        color:   _dotColors[r.nextInt(_dotColors.length)],
+        xFactor: r.nextDouble(),
+        yFactor: r.nextDouble(),
+        size:    3 + r.nextDouble() * 5,
+        phase:   rnd.nextDouble() * 2 * pi,
+        opacity: 0.4 + r.nextDouble() * 0.45,
+      );
+    });
   }
 
   @override
+  void dispose() {
+    _bgController.dispose();
+    _floatController.dispose();
+    _entryController.dispose();
+    emailController.dispose();
+    passController.dispose();
+    super.dispose();
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  String sanitizeInput(String input) =>
+      input.trim().replaceAll(RegExp(r'[<>{}\[\]\\|^`"~]'), '');
+
+  bool isValidEmail(String email) =>
+      RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email);
+
+  void _goSelection() => Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ProfileSelectionPage()),
+      );
+
+  // ─── BUILD ────────────────────────────────────────────────────────────────
+  @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Form(
-          key: formKey,
-          child: Column(
-            children: [
-              // IMAGEN
-              SizedBox(
-                width: double.infinity,
-                height: 300,
-                child: Image.asset(
-                  'assets/splash.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => 
-                    const Icon(Icons.image, size: 100, color: Colors.grey),
-                ),
-              ),
+      resizeToAvoidBottomInset: true,
+      body: Stack(
+        children: [
+          _buildBackground(),
+          _buildDots(size),
+          _buildEmojis(size),
+          _buildContent(size),
+        ],
+      ),
+    );
+  }
 
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    const Text(
-                      "Bienvenido",
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 25),
-
-                    // EMAIL
-                    TextFormField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        hintText: "Email",
-                        prefixIcon: const Icon(Icons.email),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return "Campo obligatorio";
-                        if (!isValidEmail(v)) return "Email inválido";
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 15),
-
-                    // PASSWORD
-                    TextFormField(
-                      controller: passController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        hintText: "Contraseña",
-                        prefixIcon: const Icon(Icons.lock),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return "Campo obligatorio";
-                        if (v.length < 6) return "Mínimo 6 caracteres";
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    // BOTÓN LOGIN
-                    SizedBox(
-                      width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                        onPressed: isLoading
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-
-                                setState(() => isLoading = true);
-                                print("🚀 [AUTH] Intentando login...");
-
-                                try {
-                                  await auth.loginWithEmail(
-                                    sanitizeInput(emailController.text),
-                                    passController.text,
-                                  );
-                                  print("✅ [AUTH SUCCESS] Cambiando de pantalla...");
-                                  if (mounted) goSelection();
-                                } on FirebaseAuthException catch (e) {
-                                  print("❌ Error Firebase: ${e.code}");
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text("Error: ${e.message}")),
-                                  );
-                                } catch (e) {
-                                  print("🚨 Error: $e");
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Datos incorrectos")),
-                                  );
-                                } finally {
-                                  if (mounted) setState(() => isLoading = false);
-                                }
-                              },
-                        child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                "Continue",
-                                style: TextStyle(color: Colors.white, fontSize: 17),
-                              ),
-                      ),
-                    ),
-
-                    // REGISTRO
-                    TextButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                      ),
-                      child: const Text(
-                        "¿No tienes cuenta? Regístrate aquí",
-                        style: TextStyle(
-                          color: Colors.black,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-
-                    const Text("or", style: TextStyle(color: Colors.black38)),
-                    const SizedBox(height: 15),
-
-                    // GOOGLE
-                    SizedBox(
-                      width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(255, 218, 218, 218),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                        ),
-                        onPressed: () async {
-                          try {
-                            await auth.loginGoogle();
-                            if (mounted) goSelection();
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Error con Google")),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.g_mobiledata, color: Colors.black, size: 40),
-                        label: const Text(
-                          "Continue with Google",
-                          style: TextStyle(color: Colors.black),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
+  // ─── FONDO ────────────────────────────────────────────────────────────────
+  Widget _buildBackground() {
+    return AnimatedBuilder(
+      animation: _bgController,
+      builder: (_, __) => Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: const [
+              Color(0xFFD4F4DD),
+              Color(0xFFFFF9E6),
+              Color(0xFFFFD7A5),
+              Color(0xFFE0F2E9),
             ],
+            transform: GradientRotation(_bgController.value * 2 * pi),
           ),
         ),
       ),
     );
   }
+
+  // ─── PUNTOS ───────────────────────────────────────────────────────────────
+  Widget _buildDots(Size size) {
+    return AnimatedBuilder(
+      animation: _floatController,
+      builder: (_, __) => Stack(
+        children: _dotData.map((d) {
+          final dy = sin(_floatController.value * 2 * pi + d.phase) * 10;
+          return Positioned(
+            left: d.xFactor * size.width,
+            top:  d.yFactor * size.height + dy,
+            child: Opacity(
+              opacity: d.opacity,
+              child: Container(
+                width: d.size, height: d.size,
+                decoration: BoxDecoration(color: d.color, shape: BoxShape.circle),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // ─── EMOJIS ───────────────────────────────────────────────────────────────
+  Widget _buildEmojis(Size size) {
+    return AnimatedBuilder(
+      animation: _floatController,
+      builder: (_, __) => Stack(
+        children: _emojiData.map((e) {
+          final dy    = sin(_floatController.value * 2 * pi + e.phase) * 18;
+          final angle = sin(_floatController.value * pi  + e.phase) * 0.2;
+          return Positioned(
+            left: e.xFactor * size.width,
+            top:  e.yFactor * size.height + dy,
+            child: Opacity(
+              opacity: 0.60,
+              child: Transform.rotate(
+                angle: angle,
+                child: Text(e.emoji, style: TextStyle(fontSize: e.size)),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // ─── CONTENIDO PRINCIPAL ─────────────────────────────────────────────────
+  Widget _buildContent(Size size) {
+    return SafeArea(
+      child: Column(
+        children: [
+          // ── Logo superior ──────────────────────────────────────────────
+          Expanded(
+            flex: 3,
+            child: Center(
+              child: Image.asset(
+                'assets/splash.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.image, size: 80, color: Colors.white54),
+              ),
+            ),
+          ),
+
+          // ── Tarjeta liquid glass ───────────────────────────────────────
+          FadeTransition(
+            opacity: _cardFade,
+            child: SlideTransition(
+              position: _cardSlide,
+              child: _buildGlassCard(size),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── TARJETA LIQUID GLASS ─────────────────────────────────────────────────
+  Widget _buildGlassCard(Size size) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(44)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(44)),
+            // Un solo color uniforme → sin error de borderRadius
+            border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.5),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(28, 14, 28, 32),
+            child: Form(
+              key: formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+
+                  // Handle pill
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Título
+                  Text(
+                    'BIENVENIDO',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2.5,
+                      color: const Color(0xFF50288C).withOpacity(0.75),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Inicia sesión\nen StarNutri 🌟',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1A0A36),
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Campo Email ──────────────────────────────────
+                  _glassField(
+                    controller: emailController,
+                    hint: 'Correo electrónico',
+                    icon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Campo obligatorio';
+                      if (!isValidEmail(v)) return 'Email inválido';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Campo Contraseña ─────────────────────────────
+                  _glassField(
+                    controller: passController,
+                    hint: 'Contraseña',
+                    icon: Icons.lock_outline,
+                    obscureText: _obscurePass,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: const Color(0xFF50288C).withOpacity(0.6),
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Campo obligatorio';
+                      if (v.length < 6) return 'Mínimo 6 caracteres';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Botón Continuar (negro) ───────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      onPressed: isLoading ? null : _handleLogin,
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 22, height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Text(
+                              'CONTINUAR',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Registro ─────────────────────────────────────
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      ),
+                      child: Text(
+                        '¿No tienes cuenta? Regístrate aquí',
+                        style: TextStyle(
+                          color: const Color(0xFF3C2864).withOpacity(0.75),
+                          fontSize: 13,
+                          decoration: TextDecoration.underline,
+                          decorationColor: const Color(0xFF3C2864).withOpacity(0.4),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Separador
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.white.withOpacity(0.5))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'o',
+                          style: TextStyle(
+                            color: const Color(0xFF3C2864).withOpacity(0.5),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.white.withOpacity(0.5))),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Botón Google (glass) ──────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.30),
+                        foregroundColor: const Color(0xFF1A0A36),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.7),
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                      onPressed: _handleGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 30, color: Color(0xFF1A0A36)),
+                      label: const Text(
+                        'Continuar con Google',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── CAMPO GLASS ──────────────────────────────────────────────────────────
+  Widget _glassField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller:   controller,
+      keyboardType: keyboardType,
+      obscureText:  obscureText,
+      style: const TextStyle(
+        color: Color(0xFF1A0A36),
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(
+          color: const Color(0xFF3C2864).withOpacity(0.45),
+          fontSize: 14,
+        ),
+        prefixIcon: Icon(icon, color: const Color(0xFF50288C).withOpacity(0.6), size: 20),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.25),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.55), width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.55), width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF7C3AED), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFF6BA1), width: 1.2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFF6BA1), width: 1.5),
+        ),
+        errorStyle: const TextStyle(color: Color(0xFFFF6BA1), fontSize: 11),
+      ),
+      validator: validator,
+    );
+  }
+
+  // ─── ACCIONES ─────────────────────────────────────────────────────────────
+  Future<void> _handleLogin() async {
+    if (!formKey.currentState!.validate()) return;
+    setState(() => isLoading = true);
+    try {
+      await auth.loginWithEmail(
+        sanitizeInput(emailController.text),
+        passController.text,
+      );
+      if (mounted) _goSelection();
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Error de autenticación'),
+            backgroundColor: const Color(0xFFFF6BA1),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Datos incorrectos'),
+            backgroundColor: const Color(0xFFFF6BA1),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogle() async {
+    try {
+      await auth.loginGoogle();
+      if (mounted) _goSelection();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error con Google'),
+            backgroundColor: const Color(0xFFFF6BA1),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+}
+
+// ─── Modelos ──────────────────────────────────────────────────────────────────
+class _FloatingEmoji {
+  final String emoji;
+  final double xFactor, yFactor, size, phase;
+  const _FloatingEmoji({
+    required this.emoji,
+    required this.xFactor,
+    required this.yFactor,
+    required this.size,
+    required this.phase,
+  });
+}
+
+class _Dot {
+  final Color  color;
+  final double xFactor, yFactor, size, phase, opacity;
+  const _Dot({
+    required this.color,
+    required this.xFactor,
+    required this.yFactor,
+    required this.size,
+    required this.phase,
+    required this.opacity,
+  });
 }
