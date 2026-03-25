@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:starnutri/screens/profile_selection_page.dart';
 import 'login_screen.dart';
 
@@ -13,7 +14,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin {
-  // ─── Paleta ───────────────────────────────────────────────────────────────
   static const Color _dark   = Color(0xFF1A0A36);
   static const Color _mid    = Color(0xFF50288C);
   static const Color _purple = Color(0xFF7C3AED);
@@ -23,7 +23,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   static const Color _green  = Color(0xFF4ECB71);
   static const Color _yellow = Color(0xFFFFD166);
 
-  // ─── Animaciones ──────────────────────────────────────────────────────────
   late AnimationController _bgCtrl;
   late AnimationController _floatCtrl;
   final List<Color> _dotColors = const [
@@ -32,7 +31,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   ];
   late final List<_Dot> _dots;
 
-  // ─── Estado ───────────────────────────────────────────────────────────────
   final user = FirebaseAuth.instance.currentUser;
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _pinCtrl  = TextEditingController();
@@ -46,15 +44,26 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     final rnd = Random();
     _dots = List.generate(22, (i) {
       final r = Random(i * 17 + 3);
-      return _Dot(color: _dotColors[r.nextInt(_dotColors.length)], x: r.nextDouble(), y: r.nextDouble(),
-          size: 3 + r.nextDouble() * 5, phase: rnd.nextDouble() * 2 * pi, opacity: 0.18 + r.nextDouble() * 0.28);
+      return _Dot(
+        color: _dotColors[r.nextInt(_dotColors.length)],
+        x: r.nextDouble(), y: r.nextDouble(),
+        size: 3 + r.nextDouble() * 5,
+        phase: rnd.nextDouble() * 2 * pi,
+        opacity: 0.18 + r.nextDouble() * 0.28,
+      );
     });
     _nameCtrl.text = user?.displayName ?? user?.email?.split('@')[0].toUpperCase() ?? 'PADRE/MAMÁ';
     _loadSettings();
   }
 
   @override
-  void dispose() { _bgCtrl.dispose(); _floatCtrl.dispose(); _nameCtrl.dispose(); _pinCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _bgCtrl.dispose();
+    _floatCtrl.dispose();
+    _nameCtrl.dispose();
+    _pinCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadSettings() async {
     if (user == null) return;
@@ -64,6 +73,98 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
         _isPinEnabled = doc.data()?['pinEnabled'] ?? false;
         _pinCtrl.text = doc.data()?['parentPin']  ?? '';
       });
+    }
+  }
+
+  Future<void> _confirmSignOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.88),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 60, height: 60,
+                    decoration: BoxDecoration(
+                      color: _pink.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.logout_rounded, color: _pink, size: 30),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '¿Cerrar sesión?',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _dark),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '¿Estás seguro que deseas salir de tu cuenta?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: _dark.withOpacity(0.55)),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(color: _dark.withOpacity(0.2)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: const Text('Cancelar',
+                              style: TextStyle(fontWeight: FontWeight.w700, color: _dark)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _pink,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: const Text('Sí, salir',
+                              style: TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await GoogleSignIn().signOut();
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      }
     }
   }
 
@@ -84,46 +185,65 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                 color: Colors.white.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(28),
               ),
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Agregar hijo/a', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _dark)),
-                const SizedBox(height: 20),
-                _dialogField(nameCtrl, 'Nombre del niño/a', Icons.child_care_rounded),
-                const SizedBox(height: 14),
-                _dialogField(ageCtrl, 'Edad', Icons.cake_rounded, isNumber: true),
-                const SizedBox(height: 24),
-                Row(children: [
-                  Expanded(child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: _dark.withOpacity(0.2)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w700, color: _dark)),
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: ElevatedButton(
-                    onPressed: () async {
-                      if (nameCtrl.text.isNotEmpty && ageCtrl.text.isNotEmpty) {
-                        await FirebaseFirestore.instance.collection('users').doc(user?.uid).collection('children').add({
-                          'name': nameCtrl.text.trim(),
-                          'age':  int.tryParse(ageCtrl.text.trim()) ?? 0,
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _dark,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text('Guardar', style: TextStyle(fontWeight: FontWeight.w800)),
-                  )),
-                ]),
-              ]),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Agregar hijo/a',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _dark)),
+                  const SizedBox(height: 20),
+                  _dialogField(nameCtrl, 'Nombre del niño/a', Icons.child_care_rounded),
+                  const SizedBox(height: 14),
+                  _dialogField(ageCtrl, 'Edad', Icons.cake_rounded, isNumber: true),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(color: _dark.withOpacity(0.2)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: const Text('Cancelar',
+                              style: TextStyle(fontWeight: FontWeight.w700, color: _dark)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            if (nameCtrl.text.isNotEmpty && ageCtrl.text.isNotEmpty) {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(user?.uid)
+                                  .collection('children')
+                                  .add({
+                                'name': nameCtrl.text.trim(),
+                                'age':  int.tryParse(ageCtrl.text.trim()) ?? 0,
+                                'createdAt': FieldValue.serverTimestamp(),
+                              });
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _dark,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: const Text('Guardar',
+                              style: TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -131,7 +251,8 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     );
   }
 
-  Widget _dialogField(TextEditingController ctrl, String hint, IconData icon, {bool isNumber = false}) {
+  Widget _dialogField(TextEditingController ctrl, String hint, IconData icon,
+      {bool isNumber = false}) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5FA),
@@ -156,34 +277,58 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     return Scaffold(
-      body: Stack(children: [
-        _buildBg(),
-        _buildDots(size),
-        SafeArea(child: Column(children: [
-          _buildAppBar(),
-          Expanded(child: _buildContent()),
-        ])),
-      ]),
+      body: Stack(
+        children: [
+          _buildBg(),
+          _buildDots(size),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(),
+                Expanded(child: _buildContent()),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildBg() => AnimatedBuilder(
     animation: _bgCtrl,
-    builder: (_, __) => Container(decoration: BoxDecoration(gradient: LinearGradient(
-      begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: const [Color(0xFFD4F4DD), Color(0xFFFFF9E6), Color(0xFFFFD7A5), Color(0xFFE0F2E9)],
-      transform: GradientRotation(_bgCtrl.value * 2 * pi),
-    ))),
+    builder: (_, __) => Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: const [
+            Color(0xFFD4F4DD), Color(0xFFFFF9E6),
+            Color(0xFFFFD7A5), Color(0xFFE0F2E9),
+          ],
+          transform: GradientRotation(_bgCtrl.value * 2 * pi),
+        ),
+      ),
+    ),
   );
 
   Widget _buildDots(Size size) => AnimatedBuilder(
     animation: _floatCtrl,
-    builder: (_, __) => Stack(children: _dots.map((d) {
-      final dy = sin(_floatCtrl.value * 2 * pi + d.phase) * 10;
-      return Positioned(left: d.x * size.width, top: d.y * size.height + dy,
-        child: Opacity(opacity: d.opacity, child: Container(width: d.size, height: d.size,
-            decoration: BoxDecoration(color: d.color, shape: BoxShape.circle))));
-    }).toList()),
+    builder: (_, __) => Stack(
+      children: _dots.map((d) {
+        final dy = sin(_floatCtrl.value * 2 * pi + d.phase) * 10;
+        return Positioned(
+          left: d.x * size.width,
+          top: d.y * size.height + dy,
+          child: Opacity(
+            opacity: d.opacity,
+            child: Container(
+              width: d.size, height: d.size,
+              decoration: BoxDecoration(color: d.color, shape: BoxShape.circle),
+            ),
+          ),
+        );
+      }).toList(),
+    ),
   );
 
   Widget _buildAppBar() {
@@ -196,13 +341,15 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             color: Colors.white.withOpacity(0.15),
             border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.4))),
           ),
-          child: Row(children: [
-            Expanded(child: const Text('Mi Perfil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _dark))),
-            _glassButton(Icons.logout_rounded, _pink, () async {
-              await FirebaseAuth.instance.signOut();
-              if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
-            }),
-          ]),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text('Mi Perfil',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: _dark)),
+              ),
+              _glassButton(Icons.logout_rounded, _pink, _confirmSignOut),
+            ],
+          ),
         ),
       ),
     );
@@ -211,196 +358,341 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   Widget _buildContent() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
 
-        // ── Tarjeta de perfil ─────────────────────────────────────────────
-        _glass(radius: 28, child: Column(children: [
-          Row(children: [
-            // Avatar
-            Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: _yellow, width: 3),
-                boxShadow: [BoxShadow(color: _yellow.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
-              ),
-              child: ClipOval(child: Image.asset('assets/splash.png', fit: BoxFit.cover)),
-            ),
-            const SizedBox(width: 16),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Nombre editable
-              Container(
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.35), borderRadius: BorderRadius.circular(12)),
-                child: TextField(
-                  controller: _nameCtrl,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _dark),
-                  decoration: InputDecoration(
-                    hintText: 'Tu nombre',
-                    hintStyle: TextStyle(color: _dark.withOpacity(0.35)),
-                    suffixIcon: Icon(Icons.edit_rounded, size: 16, color: _dark.withOpacity(0.3)),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          // ── Tarjeta de perfil ───────────────────────────────────────────
+          _glass(
+            radius: 28,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 72, height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _yellow, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _yellow.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Image.asset('assets/splash.png', fit: BoxFit.cover),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.35),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: TextField(
+                              controller: _nameCtrl,
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w900, color: _dark),
+                              decoration: InputDecoration(
+                                hintText: 'Tu nombre',
+                                hintStyle: TextStyle(color: _dark.withOpacity(0.35)),
+                                suffixIcon: Icon(Icons.edit_rounded,
+                                    size: 16, color: _dark.withOpacity(0.3)),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Perfil de Administrador',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: _dark.withOpacity(0.55),
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _yellow.withOpacity(0.20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _yellow.withOpacity(0.40)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.star_rounded, color: _yellow, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Nivel de Nutrición — Excelente progreso',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w800, color: _dark),
+                      ),
+                    ],
                   ),
                 ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Mis hijos ───────────────────────────────────────────────────
+          Row(
+            children: [
+              const Expanded(
+                child: Text('Mis hijos',
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _dark)),
               ),
-              const SizedBox(height: 4),
-              Text('Perfil de Administrador', style: TextStyle(fontSize: 13, color: _dark.withOpacity(0.55), fontWeight: FontWeight.w500)),
-            ])),
-          ]),
-          const SizedBox(height: 16),
-          // Badge de nivel
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: _yellow.withOpacity(0.20),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _yellow.withOpacity(0.40)),
-            ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.star_rounded, color: _yellow, size: 20),
-              const SizedBox(width: 8),
-              const Text('Nivel de Nutrición — Excelente progreso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _dark)),
-            ]),
-          ),
-        ])),
-
-        const SizedBox(height: 24),
-
-        // ── Mis hijos ─────────────────────────────────────────────────────
-        Row(children: [
-          const Expanded(child: Text('Mis hijos', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _dark))),
-          GestureDetector(
-            onTap: _showAddChildDialog,
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: _orange.withOpacity(0.18), shape: BoxShape.circle, border: Border.all(color: _orange.withOpacity(0.40))),
-              child: const Icon(Icons.add_rounded, color: _orange, size: 22),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 14),
-
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('users').doc(user?.uid).collection('children').orderBy('createdAt', descending: true).snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(_purple)));
-            }
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return _glass(child: Column(children: [
-                Icon(Icons.child_care_rounded, size: 40, color: _purple.withOpacity(0.4)),
-                const SizedBox(height: 10),
-                Text('Agrega tu primer hijo', style: TextStyle(fontSize: 15, color: _dark.withOpacity(0.55), fontWeight: FontWeight.w600)),
-              ]));
-            }
-            final kids = snapshot.data!.docs;
-            final cardColors = [_orange, _blue, _purple, _pink, _green];
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: 1.05),
-              itemCount: kids.length,
-              itemBuilder: (context, i) {
-                final kid = kids[i].data() as Map<String, dynamic>;
-                final Color c = cardColors[i % cardColors.length];
-                return _kidCard(docId: kids[i].id, name: kid['name'] ?? 'Sin nombre', age: (kid['age'] ?? 0).toString(), color: c);
-              },
-            );
-          },
-        ),
-
-        const SizedBox(height: 24),
-
-        // ── Seguridad ─────────────────────────────────────────────────────
-        const Text('Seguridad Parental', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _dark)),
-        const SizedBox(height: 14),
-        _glass(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('PIN de seguridad', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _dark)),
-              Text('Protege el acceso a la configuración', style: TextStyle(fontSize: 12, color: _dark.withOpacity(0.50))),
-            ])),
-            Switch(
-              value: _isPinEnabled,
-              activeColor: _purple,
-              onChanged: (v) => setState(() => _isPinEnabled = v),
-            ),
-          ]),
-          if (_isPinEnabled) ...[
-            const SizedBox(height: 14),
-            Container(
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.40), borderRadius: BorderRadius.circular(14)),
-              child: TextField(
-                controller: _pinCtrl,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _dark),
-                decoration: InputDecoration(
-                  hintText: 'Nuevo PIN (4 dígitos)',
-                  hintStyle: TextStyle(color: _dark.withOpacity(0.35)),
-                  prefixIcon: Icon(Icons.lock_outline_rounded, color: _purple.withOpacity(0.6), size: 20),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  counterText: '',
+              GestureDetector(
+                onTap: _showAddChildDialog,
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: _orange.withOpacity(0.18),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _orange.withOpacity(0.40)),
+                  ),
+                  child: const Icon(Icons.add_rounded, color: _orange, size: 22),
                 ),
               ),
-            ),
-          ],
-        ])),
+            ],
+          ),
+          const SizedBox(height: 14),
 
-        const SizedBox(height: 24),
-
-        // ── Botones ───────────────────────────────────────────────────────
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _dark,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            ),
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('users').doc(user?.uid).update({
-                'parentName': _nameCtrl.text.trim(),
-                'pinEnabled': _isPinEnabled,
-                'parentPin':  _isPinEnabled ? _pinCtrl.text.trim() : '',
-              });
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: const Text('Configuración guardada'),
-                  backgroundColor: _green,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  margin: const EdgeInsets.all(16),
-                ));
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user?.uid)
+                .collection('children')
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation(_purple)),
+                );
               }
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return _glass(
+                  child: Column(
+                    children: [
+                      Icon(Icons.child_care_rounded,
+                          size: 40, color: _purple.withOpacity(0.4)),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Agrega tu primer hijo',
+                        style: TextStyle(
+                            fontSize: 15,
+                            color: _dark.withOpacity(0.55),
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              final kids = snapshot.data!.docs;
+              final cardColors = [_orange, _blue, _purple, _pink, _green];
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 1.05,
+                ),
+                itemCount: kids.length,
+                itemBuilder: (context, i) {
+                  final kid = kids[i].data() as Map<String, dynamic>;
+                  final Color c = cardColors[i % cardColors.length];
+                  return _kidCard(
+                    docId: kids[i].id,
+                    name: kid['name'] ?? 'Sin nombre',
+                    age: (kid['age'] ?? 0).toString(),
+                    color: c,
+                  );
+                },
+              );
             },
-            child: const Text('GUARDAR CAMBIOS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.5)),
           ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: OutlinedButton.icon(
-            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileSelectionPage())),
-            icon: Icon(Icons.people_outline_rounded, color: _mid),
-            label: Text('Ver perfiles', style: TextStyle(color: _mid, fontWeight: FontWeight.w800, fontSize: 15)),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: _mid.withOpacity(0.40), width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+
+          const SizedBox(height: 24),
+
+          // ── Seguridad Parental ──────────────────────────────────────────
+          const Text('Seguridad Parental',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _dark)),
+          const SizedBox(height: 14),
+          _glass(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('PIN de seguridad',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.w700, color: _dark)),
+                          Text(
+                            'Protege el acceso a la configuración',
+                            style: TextStyle(fontSize: 12, color: _dark.withOpacity(0.50)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _isPinEnabled,
+                      activeColor: _purple,
+                      onChanged: (v) => setState(() => _isPinEnabled = v),
+                    ),
+                  ],
+                ),
+                if (_isPinEnabled) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.40),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: TextField(
+                      controller: _pinCtrl,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      maxLength: 4,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700, color: _dark),
+                      decoration: InputDecoration(
+                        hintText: 'Nuevo PIN (4 dígitos)',
+                        hintStyle: TextStyle(color: _dark.withOpacity(0.35)),
+                        prefixIcon: Icon(Icons.lock_outline_rounded,
+                            color: _purple.withOpacity(0.6), size: 20),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        counterText: '',
+                      ),
+                    ),
+                  ),
+                ],
+                if (!_isPinEnabled) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.lock_open_rounded,
+                          size: 16, color: _dark.withOpacity(0.35)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Sin protección de PIN',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: _dark.withOpacity(0.40),
+                            fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
-        ),
-      ]),
+
+          const SizedBox(height: 24),
+
+          // ── Guardar cambios ─────────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _dark,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+              ),
+              onPressed: () async {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user?.uid)
+                    .set(
+                  {
+                    'parentName': _nameCtrl.text.trim(),
+                    'pinEnabled': _isPinEnabled,
+                    'parentPin':  _isPinEnabled ? _pinCtrl.text.trim() : '',
+                  },
+                  SetOptions(merge: true),
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Configuración guardada'),
+                      backgroundColor: _green,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      margin: const EdgeInsets.all(16),
+                    ),
+                  );
+                }
+              },
+              child: const Text(
+                'GUARDAR CAMBIOS',
+                style: TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 15, letterSpacing: 0.5),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileSelectionPage()),
+              ),
+              icon: Icon(Icons.people_outline_rounded, color: _mid),
+              label: Text(
+                'Ver perfiles',
+                style: TextStyle(color: _mid, fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: _mid.withOpacity(0.40), width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _kidCard({required String docId, required String name, required String age, required Color color}) {
+  Widget _kidCard({
+    required String docId,
+    required String name,
+    required String age,
+    required Color color,
+  }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: BackdropFilter(
@@ -412,34 +704,59 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: color.withOpacity(0.35), width: 1.2),
           ),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: GestureDetector(
-                onTap: () => FirebaseFirestore.instance.collection('users').doc(user?.uid).collection('children').doc(docId).delete(),
-                child: Container(
-                  width: 26, height: 26,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.35), shape: BoxShape.circle),
-                  child: Icon(Icons.close_rounded, size: 14, color: color),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: GestureDetector(
+                  onTap: () => FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user?.uid)
+                      .collection('children')
+                      .doc(docId)
+                      .delete(),
+                  child: Container(
+                    width: 26, height: 26,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.35),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.close_rounded, size: 14, color: color),
+                  ),
                 ),
               ),
-            ),
-            Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(color: color.withOpacity(0.20), shape: BoxShape.circle),
-              child: Icon(Icons.child_care_rounded, color: color, size: 24),
-            ),
-            const SizedBox(height: 10),
-            Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: _dark), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 3),
-            Text('$age años', style: TextStyle(fontSize: 12, color: _dark.withOpacity(0.55), fontWeight: FontWeight.w600)),
-          ]),
+              Container(
+                width: 46, height: 46,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.20),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.child_care_rounded, color: color, size: 24),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 15, color: _dark),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '$age años',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: _dark.withOpacity(0.55),
+                    fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ─── HELPERS ─────────────────────────────────────────────────────────────
   Widget _glass({required Widget child, double radius = 22}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -482,6 +799,14 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
 }
 
 class _Dot {
-  final Color color; final double x, y, size, phase, opacity;
-  const _Dot({required this.color, required this.x, required this.y, required this.size, required this.phase, required this.opacity});
+  final Color color;
+  final double x, y, size, phase, opacity;
+  const _Dot({
+    required this.color,
+    required this.x,
+    required this.y,
+    required this.size,
+    required this.phase,
+    required this.opacity,
+  });
 }

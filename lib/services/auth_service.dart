@@ -3,9 +3,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-   // Este es el "oído" que detecta si el token es válido o si expiró
-    Stream<User?> get userStatus => _auth.authStateChanges();
-  // Iniciar sesión con Email y Contraseña
+
+  Stream<User?> get userStatus => _auth.authStateChanges();
+
   Future<User?> loginWithEmail(String email, String password) async {
     try {
       UserCredential res = await _auth.signInWithEmailAndPassword(
@@ -16,7 +16,6 @@ class AuthService {
     }
   }
 
-  // Registrar nuevo usuario
   Future<User?> registerWithEmail(String email, String password) async {
     try {
       UserCredential res = await _auth.createUserWithEmailAndPassword(
@@ -27,30 +26,36 @@ class AuthService {
     }
   }
 
-  // Google Sign In (Funciona en Android y Web con tu Client ID)
-  // En lib/services/auth_service.dart
+  Future<User?> loginGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        // ✅ En Android usa serverClientId (el ID web de OAuth)
+        serverClientId: "452503015485-fhbcaqqt4rchha7j5ps61q63sri98df4.apps.googleusercontent.com",
+      );
 
-Future<User?> loginGoogle() async {
-  try {
-    // Agregamos el clientId directamente aquí para evitar el error de "Assertion failed"
-    final GoogleSignIn googleSignIn = GoogleSignIn(
-      clientId: "452503015485-fhbcaqqt4rchha7j5ps61q63sri98df4.apps.googleusercontent.com",
-    );
+      // ✅ Esto fuerza que siempre aparezca el selector de cuentas
+      await googleSignIn.signOut();
 
-    final GoogleSignInAccount? gUser = await googleSignIn.signIn();
-    if (gUser == null) return null;
+      final GoogleSignInAccount? gUser = await googleSignIn.signIn();
+      if (gUser == null) return null;
 
-    final GoogleSignInAuthentication gAuth = await gUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: gAuth.accessToken,
-      idToken: gAuth.idToken,
-    );
+      final GoogleSignInAuthentication gAuth = await gUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: gAuth.accessToken,
+        idToken: gAuth.idToken,
+      );
 
-    UserCredential res = await _auth.signInWithCredential(credential);
-    return res.user;
-  } catch (e) {
-    print("Error Google: $e");
-    return null;
+      UserCredential res = await _auth.signInWithCredential(credential);
+      return res.user;
+    } catch (e) {
+      print("Error Google: $e");
+      return null;
+    }
   }
-}
+
+  // ✅ Nuevo método de cerrar sesión completo
+  Future<void> signOut() async {
+    await GoogleSignIn().signOut(); // limpia la sesión de Google también
+    await _auth.signOut();
+  }
 }

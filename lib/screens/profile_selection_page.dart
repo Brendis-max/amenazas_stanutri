@@ -22,7 +22,6 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
   AnimationController? _floatController;
   bool _initialized = false;
 
-  // ─── Datos de puntos ──────────────────────────────────────────────────────
   final List<Color> _dotColors = const [
     Color(0xFFFF6BA1), Color(0xFF7C3AED), Color(0xFF5DCCFF),
     Color(0xFFFF8C42), Color(0xFF4ECB71), Color(0xFFFFD166),
@@ -32,7 +31,6 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
   ];
 
   List<_Dot> _dotData = [];
-
   final user = FirebaseAuth.instance.currentUser;
 
   void _initAnimations() {
@@ -76,7 +74,7 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
     super.dispose();
   }
 
-  // ─── PIN HANDLERS (sin cambios) ───────────────────────────────────────────
+  // ─── PIN HANDLERS ─────────────────────────────────────────────────────────
   void _handleParentAccess(BuildContext context, String? savedPin, bool pinEnabled) {
     debugPrint("--- Intento de acceso a Perfil Padre ---");
     if (!pinEnabled) {
@@ -126,13 +124,13 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
               }
               if (user != null) {
                 try {
-                  await FirebaseFirestore.instance.collection('users').doc(user!.uid).set({
-                    'parentPin': newPin,
-                    'pinEnabled': true,
-                  }, SetOptions(merge: true));
+                  await FirebaseFirestore.instance
+                      .collection('users').doc(user!.uid)
+                      .set({'parentPin': newPin, 'pinEnabled': true}, SetOptions(merge: true));
                   if (!mounted) return;
                   Navigator.pop(context);
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeTabs()));
+                  Navigator.pushReplacement(
+                      context, MaterialPageRoute(builder: (_) => HomeTabs()));
                 } catch (e) {
                   debugPrint("Error: $e");
                 }
@@ -170,10 +168,13 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
             onPressed: () {
               if (inputPin == savedPin) {
                 Navigator.pop(context);
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeTabs()));
+                Navigator.pushReplacement(
+                    context, MaterialPageRoute(builder: (_) => HomeTabs()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("PIN Incorrecto"), backgroundColor: Colors.redAccent)
+                  const SnackBar(
+                      content: Text("PIN Incorrecto"),
+                      backgroundColor: Colors.redAccent)
                 );
               }
             },
@@ -188,24 +189,15 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      body: Stack(
-        children: [
-          // 1. Fondo degradado animado
-          _buildBackground(),
-
-          // 2. Puntos flotantes de colores
-          _buildDots(size),
-
-          // 3. Contenido principal
-          _buildBody(context),
-        ],
-      ),
+      body: Stack(children: [
+        _buildBackground(),
+        _buildDots(size),
+        _buildBody(context),
+      ]),
     );
   }
 
-  // ─── FONDO ────────────────────────────────────────────────────────────────
   Widget _buildBackground() {
     _initAnimations();
     return AnimatedBuilder(
@@ -216,10 +208,8 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: const [
-              Color(0xFFD4F4DD),
-              Color(0xFFFFF9E6),
-              Color(0xFFFFD7A5),
-              Color(0xFFE0F2E9),
+              Color(0xFFD4F4DD), Color(0xFFFFF9E6),
+              Color(0xFFFFD7A5), Color(0xFFE0F2E9),
             ],
             transform: GradientRotation(_bgController!.value * 2 * pi),
           ),
@@ -228,7 +218,6 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
     );
   }
 
-  // ─── PUNTOS ───────────────────────────────────────────────────────────────
   Widget _buildDots(Size size) {
     if (_floatController == null || _dotData.isEmpty) return const SizedBox();
     return AnimatedBuilder(
@@ -252,13 +241,10 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
     );
   }
 
-  // ─── CUERPO ───────────────────────────────────────────────────────────────
   Widget _buildBody(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user?.uid)
-          .snapshots(),
+          .collection('users').doc(user?.uid).snapshots(),
       builder: (context, userSnapshot) {
         if (userSnapshot.hasError) {
           return const Center(child: Text("Ocurrió un error al cargar datos"));
@@ -270,7 +256,11 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
         var userData   = userSnapshot.data!.data() as Map<String, dynamic>?;
         String? savedPin   = userData?['parentPin'];
         bool    pinEnabled = userData?['pinEnabled'] ?? false;
-        String  parentName = userData?['parentName'] ?? "Papá / Mamá";
+
+        // ✅ Si pinEnabled es false O el pin está vacío → sin candado
+        // Si pinEnabled es true Y hay pin → candado cerrado
+        final bool hasPinActive = pinEnabled && (savedPin != null && savedPin.isNotEmpty);
+        String parentName = userData?['parentName'] ?? "Papá / Mamá";
 
         return Center(
           child: SingleChildScrollView(
@@ -278,7 +268,6 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ── Tarjeta liquid glass ─────────────────────────────────
                 ClipRRect(
                   borderRadius: BorderRadius.circular(28),
                   child: BackdropFilter(
@@ -288,17 +277,13 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.18),
                         borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.55),
-                          width: 1.5,
-                        ),
+                        border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.5),
                       ),
                       padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
 
-                          // Logo dentro del card
                           Image.asset(
                             'assets/splash.png',
                             height: 90,
@@ -307,12 +292,10 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
                           ),
                           const SizedBox(height: 16),
 
-                          // Título
                           Text(
                             'SELECCIONA TU PERFIL',
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 11, fontWeight: FontWeight.w700,
                               letterSpacing: 2.5,
                               color: const Color(0xFF50288C).withOpacity(0.75),
                             ),
@@ -320,32 +303,31 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
                           const SizedBox(height: 6),
                           const Text(
                             '¿Quién eres hoy? 👋',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF1A0A36),
-                            ),
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+                                color: Color(0xFF1A0A36)),
                           ),
                           const SizedBox(height: 22),
 
-                          // ── Perfil Padre ───────────────────────────────
+                          // ── Perfil Padre con candado dinámico ─────────────
                           _profileItem(
                             label: parentName,
                             color: const Color(0xFFFFE577).withOpacity(0.75),
-                            icon: pinEnabled ? Icons.lock_outline : Icons.lock_open,
+                            // ✅ Candado cerrado si hay PIN activo, abierto si no
+                            icon: hasPinActive ? Icons.lock_rounded : Icons.lock_open_rounded,
+                            iconColor: hasPinActive
+                                ? const Color(0xFF7C3AED)
+                                : Colors.black45,
                             onTap: () => _handleParentAccess(context, savedPin, pinEnabled),
                           ),
 
                           const SizedBox(height: 12),
 
-                          // ── Perfiles Hijos ─────────────────────────────
+                          // ── Perfiles Hijos ─────────────────────────────────
                           StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(user?.uid)
+                                .collection('users').doc(user?.uid)
                                 .collection('children')
-                                .orderBy('createdAt', descending: true)
-                                .snapshots(),
+                                .orderBy('createdAt', descending: true).snapshots(),
                             builder: (context, kidsSnapshot) {
                               if (!kidsSnapshot.hasData) return const SizedBox();
                               final kids = kidsSnapshot.data!.docs;
@@ -359,14 +341,11 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
                                       label: name,
                                       color: const Color(0xFFB4F8C8).withOpacity(0.75),
                                       icon: Icons.face,
-                                      onTap: () {
-                                        Navigator.pushReplacement(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => KidsHomePage(kidName: name),
-                                          ),
-                                        );
-                                      },
+                                      onTap: () => Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) => KidsHomePage(kidName: name)),
+                                      ),
                                     ),
                                   );
                                 }).toList(),
@@ -374,12 +353,10 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
                             },
                           ),
 
-                          // ── Agregar perfil ─────────────────────────────
+                          // ── Agregar perfil ─────────────────────────────────
                           GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const AddProfilePage()),
-                            ),
+                            onTap: () => Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const AddProfilePage())),
                             child: Container(
                               width: double.infinity,
                               height: 54,
@@ -387,27 +364,18 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
                                 color: Colors.white.withOpacity(0.20),
                                 borderRadius: BorderRadius.circular(15),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.55),
-                                  width: 1.2,
-                                ),
+                                    color: Colors.white.withOpacity(0.55), width: 1.2),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.add_circle_outline,
-                                    color: const Color(0xFF3C2864).withOpacity(0.55),
-                                    size: 20,
-                                  ),
+                                  Icon(Icons.add_circle_outline,
+                                      color: const Color(0xFF3C2864).withOpacity(0.55), size: 20),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Agregar otro perfil',
-                                    style: TextStyle(
-                                      color: const Color(0xFF3C2864).withOpacity(0.60),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
+                                  Text('Agregar otro perfil',
+                                      style: TextStyle(
+                                          color: const Color(0xFF3C2864).withOpacity(0.60),
+                                          fontWeight: FontWeight.w600, fontSize: 14)),
                                 ],
                               ),
                             ),
@@ -425,12 +393,13 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
     );
   }
 
-  // ─── ITEM DE PERFIL ───────────────────────────────────────────────────────
+  // ✅ Acepta iconColor opcional para colorear el candado
   Widget _profileItem({
     required String   label,
     required Color    color,
     required IconData icon,
     required VoidCallback onTap,
+    Color? iconColor,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -442,41 +411,27 @@ class _ProfileSelectionPageState extends State<ProfileSelectionPage>
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
         ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: Colors.white.withOpacity(0.5),
-              child: const Icon(Icons.person, color: Colors.black54),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: Color(0xFF1A0A36),
-                ),
-              ),
-            ),
-            Icon(icon, size: 20, color: Colors.black45),
-          ],
-        ),
+        child: Row(children: [
+          CircleAvatar(
+            backgroundColor: Colors.white.withOpacity(0.5),
+            child: const Icon(Icons.person, color: Colors.black54),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.bold,
+                    fontSize: 15, color: Color(0xFF1A0A36))),
+          ),
+          Icon(icon, size: 20, color: iconColor ?? Colors.black45),
+        ]),
       ),
     );
   }
 }
 
-// ─── Modelo de punto ──────────────────────────────────────────────────────────
 class _Dot {
   final Color  color;
   final double xFactor, yFactor, size, phase, opacity;
-  const _Dot({
-    required this.color,
-    required this.xFactor,
-    required this.yFactor,
-    required this.size,
-    required this.phase,
-    required this.opacity,
-  });
+  const _Dot({required this.color, required this.xFactor, required this.yFactor,
+      required this.size, required this.phase, required this.opacity});
 }

@@ -29,8 +29,11 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
+  
     sdk: flutter
 
+
+ 
   #Manejos de archvos en pdf 
   pdf: ^3.11.1
   printing: ^5.13.2
@@ -53,6 +56,12 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.1
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/splash.png"
 
   flutter_native_splash: ^2.4.0
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -61,6 +70,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
