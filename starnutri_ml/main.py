@@ -4,26 +4,24 @@ import joblib
 import json
 import time
 import uuid
-from typing import Optional
 
 app = FastAPI(title="StarNutri ML API")
 
 model = None
 le = None
 metrics_cache = {}
-
-# ── Modelo de entrada ──────────────────────────────────────────
-class PredictionInput(BaseModel):
-    edad: float
-    peso: float
-    talla: float
-    imc: float
-    hemoglobina: float
-    colesterol: float
-    glucosa: float
-
-# ── Almacenamiento en memoria (mientras no hay Firestore) ───────
 results_store = {}
+
+# ── Modelo de entrada con las columnas REALES ──────────────────
+class PredictionInput(BaseModel):
+    age: float
+    avg_calories: float
+    avg_protein: float
+    avg_carbs: float
+    avg_fat: float
+    avg_water: float
+    meals: float
+    days_tracked: float
 
 # ── Startup ────────────────────────────────────────────────────
 @app.on_event("startup")
@@ -62,13 +60,14 @@ def predict(data: PredictionInput):
         raise HTTPException(status_code=503, detail="Modelo no cargado")
 
     features = [[
-        data.edad,
-        data.peso,
-        data.talla,
-        data.imc,
-        data.hemoglobina,
-        data.colesterol,
-        data.glucosa
+        data.age,
+        data.avg_calories,
+        data.avg_protein,
+        data.avg_carbs,
+        data.avg_fat,
+        data.avg_water,
+        data.meals,
+        data.days_tracked
     ]]
 
     start = time.time()
@@ -77,17 +76,16 @@ def predict(data: PredictionInput):
 
     label = le.inverse_transform([prediction_encoded])[0]
 
-    # Guardar resultado
     result_id = str(uuid.uuid4())
     result = {
         "id": result_id,
         "prediccion": label,
+        "riesgo_nutricional": label.upper(),
         "tiempo_ms": elapsed_ms,
         "modelo_usado": metrics_cache.get("best_model", "desconocido"),
         "input": data.dict()
     }
     results_store[result_id] = result
-
     return result
 
 @app.get("/results/{result_id}")
