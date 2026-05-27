@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'stats_page.dart';
 import 'create_report_page.dart';
+import 'notifications_page.dart';
+import 'profile_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -180,7 +182,6 @@ class _DashboardPageState extends State<DashboardPage>
                       const SizedBox(height: 24),
                       _sectionLabel('Balance nutricional'),
                       const SizedBox(height: 12),
-                      // ← Balance calculado desde reportes reales de Firestore
                       _buildBalanceFromFirestore(cId),
                       const SizedBox(height: 24),
                       _sectionLabel('Acciones rápidas'),
@@ -221,34 +222,55 @@ class _DashboardPageState extends State<DashboardPage>
                 child: Image.asset('assets/starnutri2.png', fit: BoxFit.contain),
               ),
               const Spacer(),
-              _glassCircle(
-                child: Stack(
-                  children: [
-                    Icon(Icons.notifications_none_rounded,
-                        size: 22, color: _dark.withOpacity(0.75)),
-                    Positioned(
-                      right: 0, top: 0,
-                      child: Container(
-                        width: 7, height: 7,
-                        decoration: const BoxDecoration(
-                            color: _pink, shape: BoxShape.circle),
+
+              // ── Botón notificaciones → NotificationsPage ──────────────────
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const NotificationsPage(),
+                  ),
+                ),
+                child: _glassCircle(
+                  child: Stack(
+                    children: [
+                      Icon(Icons.notifications_none_rounded,
+                          size: 22, color: _dark.withOpacity(0.75)),
+                      Positioned(
+                        right: 0, top: 0,
+                        child: Container(
+                          width: 7, height: 7,
+                          decoration: const BoxDecoration(
+                              color: _pink, shape: BoxShape.circle),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
+
               const SizedBox(width: 10),
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: _purple.withOpacity(0.22),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.55)),
+
+              // ── Botón perfil → ProfilePage ────────────────────────────────
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ProfilePage(),
+                  ),
                 ),
-                child: Center(
-                  child: Text(initial,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w900, color: _dark)),
+                child: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: _purple.withOpacity(0.22),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.55)),
+                  ),
+                  child: Center(
+                    child: Text(initial,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w900, color: _dark)),
+                  ),
                 ),
               ),
             ],
@@ -454,8 +476,8 @@ class _DashboardPageState extends State<DashboardPage>
             context,
             MaterialPageRoute(
               builder: (_) => CreateReportPage(
-                childId:      cId,
-                childName:    cName,
+                childId:       cId,
+                childName:     cName,
                 comidaInicial: m['t'] as String,
               ),
             ),
@@ -482,7 +504,6 @@ class _DashboardPageState extends State<DashboardPage>
                       child: Icon(m['icon'] as IconData, color: accent, size: 26),
                     ),
                     const SizedBox(height: 8),
-                    
                     const SizedBox(height: 4),
                     Text(m['t'] as String,
                         style: const TextStyle(
@@ -505,9 +526,7 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // ─── BALANCE NUTRICIONAL — calculado desde reportes reales ───────────────
-  // Lee los últimos 7 reportes del niño seleccionado y calcula el % real
-  // de proteínas, carbohidratos, grasas y agua vs. los objetivos diarios.
+  // ─── BALANCE NUTRICIONAL ──────────────────────────────────────────────────
   Widget _buildBalanceFromFirestore(String cId) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -519,7 +538,6 @@ class _DashboardPageState extends State<DashboardPage>
           .limit(7)
           .snapshots(),
       builder: (context, snapshot) {
-        // ── Mientras carga ─────────────────────────────────────────────────
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _glass(
             radius: 24,
@@ -533,13 +551,13 @@ class _DashboardPageState extends State<DashboardPage>
           );
         }
 
-        // ── Sin datos todavía ──────────────────────────────────────────────
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return _glass(
             radius: 24,
             child: Column(
               children: [
-                const Text('📊', style: TextStyle(fontSize: 36)),
+                Icon(Icons.bar_chart_rounded,
+                    size: 36, color: _purple.withOpacity(0.5)),
                 const SizedBox(height: 10),
                 Text('Registra comidas para ver\nel balance nutricional',
                     textAlign: TextAlign.center,
@@ -552,7 +570,6 @@ class _DashboardPageState extends State<DashboardPage>
           );
         }
 
-        // ── Calcular totales de los reportes ──────────────────────────────
         double totalProt  = 0;
         double totalCarbs = 0;
         double totalFat   = 0;
@@ -569,16 +586,12 @@ class _DashboardPageState extends State<DashboardPage>
           totalWater += (d['waterGlasses']  ?? 0) as int;
         }
 
-        // Promedios diarios
         final avgProt  = totalProt  / count;
         final avgCarbs = totalCarbs / count;
         final avgFat   = totalFat   / count;
         final avgCal   = totalCal   / count;
         final avgWater = totalWater / count;
 
-        // Referencias diarias para un niño promedio (7-10 años)
-        // Proteínas: ~50 g/día, Carbs: ~130 g/día, Grasas: ~65 g/día
-        // Agua: 6-8 vasos/día, Calorías: ~1600 kcal/día
         const double refProt  = 50.0;
         const double refCarbs = 130.0;
         const double refFat   = 65.0;
@@ -623,7 +636,6 @@ class _DashboardPageState extends State<DashboardPage>
                 ],
               ),
               const SizedBox(height: 18),
-              // Círculos indicadores
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -636,10 +648,9 @@ class _DashboardPageState extends State<DashboardPage>
                 ],
               ),
               const SizedBox(height: 18),
-              // Barras
-              _barItem('Calorías',  calPct,  _orange,
+              _barItem('Calorías', calPct, _orange,
                   '${avgCal.toInt()} / ${refCal.toInt()} kcal'),
-              _barItem('Grasas',    fatPct,  _pink,
+              _barItem('Grasas',   fatPct, _pink,
                   '${avgFat.toStringAsFixed(1)} / ${refFat.toStringAsFixed(0)} g'),
             ],
           ),

@@ -425,9 +425,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                   ],
                 ),
                 const SizedBox(height: 16),
+                // ✅ FIX OVERFLOW: Flexible en el Text del banner
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                   decoration: BoxDecoration(
                     color: _yellow.withOpacity(0.20),
                     borderRadius: BorderRadius.circular(16),
@@ -438,10 +439,16 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                     children: [
                       Icon(Icons.star_rounded, color: _yellow, size: 20),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Nivel de Nutrición — Excelente progreso',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w800, color: _dark),
+                      Flexible(
+                        child: Text(
+                          'Nivel de Nutrición — Excelente progreso',
+                          style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: _dark),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
                     ],
                   ),

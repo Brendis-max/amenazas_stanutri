@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 
 /// ─── CREDENCIALES GEMINI (Google AI Studio — GRATIS) ─────────────────────
@@ -49,17 +50,12 @@ class FoodItem {
 class NutritionService {
 
   // ── BUSCAR ALIMENTOS ─────────────────────────────────────────────────────
-  // 1ª pasada: mx.openfoodfacts.org (solo productos de México, en español)
-  // 2ª pasada: world.openfoodfacts.org con filtro de país México como fallback
-  // 3ª pasada: world.openfoodfacts.org global si aún faltan resultados
   Future<List<FoodItem>> searchFoods(String query) async {
     if (query.trim().isEmpty) return [];
 
-    // ── Pasada 1: subdominio MX (resultados solo en español de México) ─────
     final mxResults = await _fetchFromMx(query);
     if (mxResults.length >= 3) return mxResults;
 
-    // ── Pasada 2: world con tag de país México ─────────────────────────────
     final worldMx = await _fetchFromWorld(query, countryTag: 'mexico');
     final ids1 = mxResults.map((f) => f.id).toSet();
     final merged1 = [
@@ -68,7 +64,6 @@ class NutritionService {
     ];
     if (merged1.length >= 3) return merged1.take(5).toList();
 
-    // ── Pasada 3: global con idioma ES como último recurso ─────────────────
     final global = await _fetchFromWorld(query, countryTag: null);
     final ids2 = merged1.map((f) => f.id).toSet();
     final merged2 = [
@@ -78,10 +73,7 @@ class NutritionService {
     return merged2.take(5).toList();
   }
 
-  // ── Fetch desde mx.openfoodfacts.org ─────────────────────────────────────
   Future<List<FoodItem>> _fetchFromMx(String query) async {
-    // El subdominio mx.openfoodfacts.org devuelve productos registrados
-    // en México y usa español como idioma por defecto.
     final uri = Uri.parse(
       'https://mx.openfoodfacts.org/cgi/search.pl'
       '?search_terms=${Uri.encodeComponent(query)}'
@@ -105,7 +97,6 @@ class NutritionService {
     }
   }
 
-  // ── Fetch desde world.openfoodfacts.org con filtros ────────────────────
   Future<List<FoodItem>> _fetchFromWorld(
     String query, {
     required String? countryTag,
@@ -139,13 +130,11 @@ class NutritionService {
     }
   }
 
-  // ── Parser común ─────────────────────────────────────────────────────────
   List<FoodItem> _parseProducts(Map<String, dynamic> data) {
     final products = data['products'] as List<dynamic>? ?? [];
     final List<FoodItem> results = [];
 
     for (final p in products) {
-      // Prioridad de nombre: MX > ES > genérico si parece español
       final nameMx  = (p['product_name_es_MX'] as String?)?.trim() ?? '';
       final nameEs  = (p['product_name_es']     as String?)?.trim() ?? '';
       final nameGen = (p['product_name']         as String?)?.trim() ?? '';
@@ -158,13 +147,11 @@ class NutritionService {
       } else if (nameGen.isNotEmpty && _looksSpanish(nameGen)) {
         bestName = nameGen;
       } else if (nameGen.isNotEmpty && results.length < 2) {
-        // Solo acepta nombre no español si tenemos muy pocos resultados
         bestName = nameGen;
       }
 
       if (bestName.isEmpty) continue;
 
-      // ── Nutrientes por 100 g ─────────────────────────────────────────────
       final n = p['nutriments'] as Map<String, dynamic>? ?? {};
 
       double calories = _d(n['energy-kcal_100g'] ?? n['energy-kcal_serving']);
@@ -195,7 +182,7 @@ class NutritionService {
     return results;
   }
 
-  // ── GENERAR RECOMENDACIÓN CON GEMINI 1.5 FLASH (GRATIS) ─────────────────
+  // ── GENERAR RECOMENDACIÓN CON GEMINI 1.5 FLASH ──────────────────────────
   Future<String> generateRecommendation({
     required String       childName,
     required int          childAge,
@@ -207,32 +194,75 @@ class NutritionService {
     required List<String> foodsEaten,
   }) async {
     final int recommended = _recommendedCaloriesByAge(childAge);
+    final now = DateTime.now();
+
+    // Genera un token único por llamada para forzar variación en la respuesta
+    final uniqueToken = Random().nextInt(999999).toString();
+
+    // Contexto temporal para personalizar la recomendación
+    final weekdays = [
+      'lunes', 'martes', 'miércoles', 'jueves',
+      'viernes', 'sábado', 'domingo'
+    ];
+    final dayName  = weekdays[now.weekday - 1];
+    final hour     = now.hour;
+    final timeSlot = hour < 12
+        ? 'mañana'
+        : hour < 17
+            ? 'tarde'
+            : 'noche';
+
+    // Banco rotativo de ingredientes típicos mexicanos para sugerencias
+    final ingredientGroups = [
+      ['nopales con huevo', 'agua de jamaica', 'tortillas de maíz'],
+      ['caldo de frijoles negros', 'chile poblano relleno', 'arroz rojo'],
+      ['sopa de verduras', 'pollo al horno con epazote', 'agua de limón'],
+      ['enfrijoladas', 'pepino con limón y chile', 'leche con cacao'],
+      ['guisado de acelgas', 'quesadillas de flor de calabaza', 'fruta de temporada'],
+      ['pozole de pollo', 'jícama con naranja', 'té de manzanilla'],
+      ['tacos de picadillo', 'puré de chayote', 'agua de horchata'],
+    ];
+    final selectedIngredients =
+        ingredientGroups[now.weekday % ingredientGroups.length];
+
+    // Determina déficit/exceso para enfocar la recomendación
+    final calDiff   = totalCalories - recommended;
+    final protDef   = totalProtein < 15 ? 'baja en proteínas' : 'adecuada en proteínas';
+    final carbsNote = totalCarbs > 80 ? 'alta en carbohidratos' : 'equilibrada en carbohidratos';
 
     final prompt = '''
-Eres un nutriólogo infantil experto en México. Analiza la alimentación de hoy de un niño y da recomendaciones personalizadas en español, de forma amigable para padres mexicanos.
+Eres un nutriólogo infantil especialista en alimentación mexicana. Tu tarea es generar una recomendación ÚNICA y DIFERENTE para cada análisis.
+
+CONTEXTO TEMPORAL (úsalo para personalizar):
+- Dia: $dayName por la $timeSlot
+- Token de sesión: $uniqueToken
+- Hora: ${now.hour}:${now.minute.toString().padLeft(2, '0')}
 
 DATOS DEL NIÑO:
-- Nombre: $childName
-- Edad: $childAge años
-- Calorías recomendadas por día: $recommended kcal
-
-LO QUE COMIÓ HOY:
-- Alimentos: ${foodsEaten.join(', ')}
-- Calorías totales: ${totalCalories.toInt()} kcal
-- Proteínas: ${totalProtein.toStringAsFixed(1)} g
-- Carbohidratos: ${totalCarbs.toStringAsFixed(1)} g
+- Nombre: $childName ($childAge años)
+- Calorías consumidas: ${totalCalories.toInt()} kcal de $recommended kcal recomendadas
+- Proteínas: ${totalProtein.toStringAsFixed(1)} g ($protDef)
+- Carbohidratos: ${totalCarbs.toStringAsFixed(1)} g ($carbsNote)
 - Grasas: ${totalFat.toStringAsFixed(1)} g
-- Vasos de agua: $waterGlasses
+- Agua: $waterGlasses vasos
+- Alimentos de hoy: ${foodsEaten.join(', ')}
 
-INSTRUCCIONES:
-1. Evalúa si las calorías son adecuadas para su edad
-2. Identifica qué nutrientes le faltaron o sobraron
-3. Da 2-3 recomendaciones concretas usando alimentos típicos de México (frijoles, tortillas, nopales, frutas locales, etc.)
-4. Usa un tono positivo y motivador para los padres
-5. Máximo 150 palabras
-6. Solo texto plano, sin markdown ni asteriscos
+ANÁLISIS NUTRICIONAL:
+${calDiff < -250 ? '- DÉFICIT de ${calDiff.abs().toInt()} kcal: necesita más energía' : calDiff > 250 ? '- EXCESO de ${calDiff.toInt()} kcal: reducir porciones mañana' : '- Calorías EQUILIBRADAS, enfoca en calidad'}
+${totalWaterGlassesNote(waterGlasses)}
 
-Responde directamente sin saludos ni introducciones.
+INGREDIENTES SUGERIDOS PARA HOY ($dayName):
+${selectedIngredients.join(', ')}
+
+INSTRUCCIONES ESTRICTAS:
+1. Analiza específicamente lo que comió $childName (menciona 1-2 alimentos de su lista)
+2. Da 1 observación concreta sobre su perfil nutricional de hoy
+3. Sugiere UNA receta o preparación usando los ingredientes del día
+4. Cierra con una frase motivadora corta y diferente
+5. Máximo 130 palabras. Solo texto plano, sin asteriscos ni guiones al inicio.
+6. VARÍA el tono: hoy es $dayName por la $timeSlot, adáptalo
+
+Responde directo, sin saludos ni "Hola".
 ''';
 
     try {
@@ -250,9 +280,10 @@ Responde directamente sin saludos ni introducciones.
             }
           ],
           'generationConfig': {
-            'temperature':     0.7,
-            'maxOutputTokens': 400,
-            'topP':            0.9,
+            'temperature':     0.95,   // más alto = más variado
+            'maxOutputTokens': 350,
+            'topP':            0.95,
+            'topK':            64,
           },
           'safetySettings': [
             {'category': 'HARM_CATEGORY_HARASSMENT',  'threshold': 'BLOCK_NONE'},
@@ -276,36 +307,75 @@ Responde directamente sin saludos ni introducciones.
         totalCalories: totalCalories,
         recommended:   recommended,
         waterGlasses:  waterGlasses,
+        foodsEaten:    foodsEaten,
       );
     }
   }
 
-  // ── Fallback local ────────────────────────────────────────────────────────
+  String totalWaterGlassesNote(int glasses) {
+    if (glasses == 0) return '- SIN agua registrada: hidratación crítica';
+    if (glasses < 4)  return '- Hidratación BAJA: solo $glasses vasos';
+    if (glasses < 6)  return '- Hidratación MODERADA: $glasses vasos';
+    return '- Hidratación BUENA: $glasses vasos';
+  }
+
+  // ── Fallback local con variación por día ─────────────────────────────────
   String _recomendacionGenerica({
-    required String childName,
-    required double totalCalories,
-    required int    recommended,
-    required int    waterGlasses,
+    required String       childName,
+    required double       totalCalories,
+    required int          recommended,
+    required int          waterGlasses,
+    required List<String> foodsEaten,
   }) {
     final diff    = totalCalories - recommended;
     final diffAbs = diff.abs().toInt();
+    final rnd     = Random();
 
-    String calMsg;
-    if (diff < -200) {
-      calMsg = '$childName consumió $diffAbs kcal menos de lo recomendado. '
-          'Agrega una colación nutritiva como fruta con cacahuate o un vaso de leche.';
-    } else if (diff > 200) {
-      calMsg = '$childName consumió $diffAbs kcal más de lo recomendado. '
-          'Mañana incluye más verduras y reduce los alimentos procesados.';
-    } else {
-      calMsg = '¡Excelente! $childName tuvo un consumo calórico muy adecuado para su edad.';
-    }
+    final caloricMsgs = [
+      if (diff < -200) ...[
+        '$childName necesita $diffAbs kcal más. Ofrece una colación de plátano con cacahuate.',
+        'Faltan $diffAbs kcal en el día de $childName. Un vaso de leche con granola puede ayudar.',
+        '$childName tuvo un déficit energético hoy. Agrega frijoles o aguacate en la siguiente comida.',
+      ] else if (diff > 200) ...[
+        '$childName consumió $diffAbs kcal de más. Mañana prioriza verduras al vapor y pollo.',
+        'Hoy hubo un ligero exceso calórico. Reduce harinas refinadas en la próxima comida de $childName.',
+        'El consumo de $childName superó lo recomendado. Frutas como jícama o pepino son ideales de snack.',
+      ] else ...[
+        '¡Buen balance calórico hoy! $childName estuvo muy cerca de su meta energética.',
+        'Las calorias de $childName estuvieron equilibradas. Sigue así con porciones variadas.',
+        'Excelente control calórico para $childName. La constancia es la clave del bienestar.',
+      ],
+    ];
 
-    final waterMsg = waterGlasses < 6
-        ? 'Recuerda que debe tomar al menos 6 vasos de agua al día.'
-        : '¡Muy bien con la hidratación!';
+    final waterMsgs = [
+      if (waterGlasses < 4) ...[
+        'Recuerda ofrecer agua entre comidas.',
+        'La hidratación es esencial: intenta 6 vasos mañana.',
+        'El agua ayuda a la concentración escolar. Meta: 6-8 vasos diarios.',
+      ] else ...[
+        'Buena hidratación hoy.',
+        'El agua estuvo presente. Mantén el hábito.',
+        'Hidratacion correcta. Agua de frutas naturales también cuenta.',
+      ],
+    ];
 
-    return '$calMsg $waterMsg Incluye frijoles, verduras de colores y fruta fresca en la siguiente comida para un balance perfecto.';
+    final tipMsgs = [
+      'Incluye nopales o verduras de hoja verde mañana.',
+      'Los frijoles son una excelente fuente de proteina mexicana.',
+      'Agrega fruta de temporada como mango o guayaba como postre.',
+      'El chile poblano y el epazote son super alimentos locales.',
+      'Tortillas de maiz aportan calcio y son mejor opción que el pan blanco.',
+    ];
+
+    final calMsg   = caloricMsgs[rnd.nextInt(caloricMsgs.length)];
+    final waterMsg = waterMsgs[rnd.nextInt(waterMsgs.length)];
+    final tip      = tipMsgs[rnd.nextInt(tipMsgs.length)];
+
+    final foodMention = foodsEaten.isNotEmpty
+        ? 'Hoy comió ${foodsEaten.first.toLowerCase()}, lo cual es positivo. '
+        : '';
+
+    return '$foodMention$calMsg $waterMsg $tip';
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

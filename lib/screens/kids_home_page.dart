@@ -145,20 +145,12 @@ class _KidsHomePageState extends State<KidsHomePage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          // ── Header: logo + nombre + salir + puntos ────────────────────
           _buildHeader(),
           const SizedBox(height: 22),
-
-          // ── Bienvenida hero ───────────────────────────────────────────
           _buildHeroWelcome(),
           const SizedBox(height: 24),
-
-          // ── Dato curioso ──────────────────────────────────────────────
           _buildFunFact(),
           const SizedBox(height: 26),
-
-          // ── Juegos ────────────────────────────────────────────────────
           Text(
             'JUEGOS',
             style: TextStyle(
@@ -178,8 +170,6 @@ class _KidsHomePageState extends State<KidsHomePage>
           const SizedBox(height: 14),
           _buildGamesGrid(),
           const SizedBox(height: 26),
-
-          // ── Mis logros ────────────────────────────────────────────────
           Text(
             'LOGROS',
             style: TextStyle(
@@ -207,14 +197,18 @@ class _KidsHomePageState extends State<KidsHomePage>
   Widget _buildHeader() {
     return Row(
       children: [
-        // Botón salir
+        // Botón con flecha
         GestureDetector(
           onTap: () => Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const ProfileSelectionPage()),
           ),
           child: _glassCircle(
-            child: const Icon(Icons.exit_to_app, size: 20, color: Color(0xFF1A0A36)),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: Color(0xFF1A0A36),
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -226,19 +220,7 @@ class _KidsHomePageState extends State<KidsHomePage>
           errorBuilder: (_, __, ___) =>
               const Text('🌟', style: TextStyle(fontSize: 28)),
         ),
-        const SizedBox(width: 10),
-
-        // Nombre
-        Expanded(
-          child: Text(
-            widget.kidName.toUpperCase(),
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.nunito(
-              fontSize: 20, fontWeight: FontWeight.w900,
-              color: const Color(0xFF1A0A36), letterSpacing: 1,
-            ),
-          ),
-        ),
+        const Spacer(),
 
         // Puntos badge
         ClipRRect(
@@ -665,7 +647,7 @@ class _KidsHomePageState extends State<KidsHomePage>
   }
 }
 
-// ─── Modelos ──────────────────────────────────────────────────────────────────
+// ─── Modelo ───────────────────────────────────────────────────────────────────
 class _Dot {
   final Color  color;
   final double xFactor, yFactor, size, phase, opacity;

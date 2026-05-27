@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,16 +9,11 @@ class SecurityUtils {
   static String sanitizeText(String input) {
     print(" [SEGURIDAD] Iniciando sanitización de: '$input'");
 
-    // 1. Eliminar espacios extra
     String sanitized = input.trim();
-
-    // 2. Eliminar caracteres peligrosos para NoSQL Injection
     String finalResult = sanitized.replaceAll(RegExp(r'[<>{}\[\]\\|^`"~]'), '');
 
     if (input != finalResult) {
-      print(
-        "⚠️ [SEGURIDAD] Caracteres peligrosos eliminados. Resultado: '$finalResult'",
-      );
+      print("⚠️ [SEGURIDAD] Caracteres peligrosos eliminados. Resultado: '$finalResult'");
     } else {
       print(" [SEGURIDAD] Input limpio, no se detectaron amenazas.");
     }
@@ -35,42 +31,34 @@ class AddProfilePage extends StatefulWidget {
 
 class _AddProfilePageState extends State<AddProfilePage> {
   final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
+  final _ageController  = TextEditingController();
+  final _formKey        = GlobalKey<FormState>();
+  bool _isLoading       = false;
 
   Future<void> _saveChildProfile() async {
-    // Validación del formulario antes de procesar
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser;
 
     try {
-      // --- IMPLEMENTACIÓN DE SEGURIDAD: SANITIZACIÓN ---
-      // Aplicamos la limpieza antes de que el dato toque la base de datos
-      final String nombreLimpio = SecurityUtils.sanitizeText(
-        _nameController.text,
-      );
-      final int edadLimpia = int.parse(_ageController.text);
+      final String nombreLimpio = SecurityUtils.sanitizeText(_nameController.text);
+      final int    edadLimpia   = int.parse(_ageController.text);
 
-      // Verificación de longitud extra por seguridad 
       if (nombreLimpio.length >= 3 && nombreLimpio.length <= 20) {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user!.uid)
             .collection('children')
             .add({
-              'name': nombreLimpio,
-              'age': edadLimpia,
+              'name':      nombreLimpio,
+              'age':       edadLimpia,
               'createdAt': FieldValue.serverTimestamp(),
-              'rol': 'Niño', // Control de acceso por roles
+              'rol':       'Niño',
             });
 
-        // Verificamos que el widget siga activo para evitar errores de consola
         if (!mounted) return;
-
-        Navigator.pop(context); // Regresa a la pantalla de selección
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("¡Perfil de niño agregado!")),
         );
@@ -79,9 +67,9 @@ class _AddProfilePageState extends State<AddProfilePage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -95,145 +83,235 @@ class _AddProfilePageState extends State<AddProfilePage> {
         height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFF6A3), Color(0xFFFFD194)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFD4F4DD),
+              Color(0xFFFFF9E6),
+              Color(0xFFFFD7A5),
+              Color(0xFFE0F2E9),
+            ],
           ),
         ),
         child: Center(
           child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(30),
-              child: Container(
-                padding: const EdgeInsets.all(25),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        "Nuevo Perfil",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
 
-                      // CAMPO NOMBRE CON VALIDACIÓN
-                      TextFormField(
-                        controller: _nameController,
-                        maxLength: 20,
-                        // --- SEGURIDAD: Bloquea caracteres especiales mientras el usuario escribe ---
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ ]'),
+                // ── Imagen superior ─────────────────────────────────────────
+                Image.asset(
+                  'assets/splash.png',
+                  height: 130,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 20),
+
+                // ── Card con efecto blur ─────────────────────────────────────
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(26, 28, 26, 24),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.60),
+                          width: 1.4,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
                           ),
                         ],
-                        decoration: const InputDecoration(
-                          labelText: "Nombre del niño/a",
-                          border: OutlineInputBorder(),
-                          counterText: "",
-                          
-                        ),
-                        validator: (v) {
-                          print(
-                            " [VALIDACIÓN] Verificando caracteres de: '$v'",
-                          );
-
-                          if (v == null || v.trim().isEmpty) {
-                            print(" [VALIDACIÓN] Error: Campo vacío.");
-                            return "Escribe un nombre";
-                          }
-
-                          // --- SEGURIDAD: Validar mediante RegExp que no haya símbolos ---
-                          final nameRegExp = RegExp(
-                            r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$',
-                          );
-                          if (!nameRegExp.hasMatch(v)) {
-                            print(
-                              " [VALIDACIÓN] Error: Se detectaron símbolos prohibidos.",
-                            );
-                            return "Solo se permiten letras (sin signos)";
-                          }
-
-                          if (v.trim().length < 3) {
-                            print(" [VALIDACIÓN] Error: Nombre muy corto.");
-                            return "Nombre demasiado corto";
-                          }
-
-                          print(
-                            "[VALIDACIÓN] Caracteres permitidos confirmados.",
-                          );
-                          return null;
-                        },
                       ),
-                      const SizedBox(height: 15),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
 
-                      // CAMPO EDAD CON VALIDACIÓN
-                      TextFormField(
-                        controller: _ageController,
-                        keyboardType: TextInputType.number,
-                        maxLength: 2,
-                        decoration: const InputDecoration(
-                          labelText: "Edad",
-                          border: OutlineInputBorder(),
-                          counterText: "",
-                        ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return "Escribe la edad";
-                          final n = int.tryParse(v);
-                          if (n == null || n <= 0) return "Edad no válida";
-                          if (n > 10) return "Perfil solo para menores";
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 25),
-
-                      // BOTÓN DE ACCIÓN
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE6F991),
-                            foregroundColor: Colors.black87,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                            // Título
+                            const Text(
+                              "Nuevo Perfil",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF1A0A36),
+                              ),
                             ),
-                          ),
-                          onPressed: _isLoading ? null : _saveChildProfile,
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.black87,
-                                  ),
-                                )
-                              : const Text(
-                                  "Guardar Perfil",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                            const SizedBox(height: 6),
+                            Text(
+                              "Agrega al niño o niña",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF1A0A36).withOpacity(0.50),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // ── Campo Nombre ──────────────────────────────────
+                            _glassField(
+                              controller: _nameController,
+                              label: "Nombre del niño/a",
+                              icon: Icons.child_care_rounded,
+                              maxLength: 20,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'[a-zA-ZáéíóúÁÉÍÓÚñÑ ]'),
                                 ),
+                              ],
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return "Escribe un nombre";
+                                final nameRegExp = RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$');
+                                if (!nameRegExp.hasMatch(v)) return "Solo se permiten letras (sin signos)";
+                                if (v.trim().length < 3) return "Nombre demasiado corto";
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+
+                            // ── Campo Edad ────────────────────────────────────
+                            _glassField(
+                              controller: _ageController,
+                              label: "Edad",
+                              icon: Icons.cake_rounded,
+                              keyboardType: TextInputType.number,
+                              maxLength: 2,
+                              validator: (v) {
+                                if (v == null || v.isEmpty) return "Escribe la edad";
+                                final n = int.tryParse(v);
+                                if (n == null || n <= 0) return "Edad no válida";
+                                if (n > 10) return "Perfil solo para menores";
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 28),
+
+                            // ── Botón Guardar ─────────────────────────────────
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1A0A36),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                onPressed: _isLoading ? null : _saveChildProfile,
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        "Guardar Perfil",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+
+                            // ── Cancelar ──────────────────────────────────────
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: Text(
+                                "Cancelar",
+                                style: TextStyle(
+                                  color: const Color(0xFF1A0A36).withOpacity(0.45),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text(
-                          "Cancelar",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Campo de texto con estilo glass ────────────────────────────────────────
+  Widget _glassField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          maxLength: maxLength,
+          inputFormatters: inputFormatters,
+          validator: validator,
+          style: const TextStyle(
+            color: Color(0xFF1A0A36),
+            fontWeight: FontWeight.w600,
+            fontSize: 15,
+          ),
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: TextStyle(
+              color: const Color(0xFF1A0A36).withOpacity(0.55),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            prefixIcon: Icon(icon,
+                color: const Color(0xFF7C3AED).withOpacity(0.70), size: 20),
+            counterText: "",
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.30),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                  color: Colors.white.withOpacity(0.60), width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                  color: Color(0xFF7C3AED), width: 1.8),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                  color: Color(0xFFFF6BA1), width: 1.4),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                  color: Color(0xFFFF6BA1), width: 1.8),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 15),
           ),
         ),
       ),

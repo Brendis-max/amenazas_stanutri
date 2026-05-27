@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "452503015485-gnklom9ssbbnhudick1vfgk87emrd7fs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.starnutri",
+            "certificate_hash": "68317fe9869afb4f3c102c13c674ce1e55a90b00"
+          }
+        },
+        {
           "client_id": "452503015485-fhbcaqqt4rchha7j5ps61q63sri98df4.apps.googleusercontent.com",
           "client_type": 3
         }

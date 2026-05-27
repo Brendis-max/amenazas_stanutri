@@ -74,7 +74,7 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // ─── PDF (sin emojis — usa texto plano para evitar "Unable to find font") ─
+  // ─── PDF ──────────────────────────────────────────────────────────────────
   Future<void> _abrirPDF(Map<String, dynamic> report) async {
     final pdf  = pw.Document();
     final font = await PdfGoogleFonts.nunitoRegular();
@@ -100,8 +100,6 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-
-              // ── Header ──────────────────────────────────────────────────
               pw.Container(
                 width: double.infinity,
                 padding: const pw.EdgeInsets.all(20),
@@ -129,15 +127,12 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
                 ),
               ),
               pw.SizedBox(height: 22),
-
-              // ── Alimentos ───────────────────────────────────────────────
               pw.Text('Alimentos registrados:',
                   style: pw.TextStyle(
                       font: bold,
                       fontSize: 17,
                       color: PdfColors.deepPurple700)),
               pw.SizedBox(height: 10),
-
               if (foods.isEmpty)
                 pw.Text('No se registraron alimentos.',
                     style: pw.TextStyle(
@@ -162,10 +157,7 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
                     ),
                   );
                 }),
-
               pw.SizedBox(height: 20),
-
-              // ── Resumen Nutricional ──────────────────────────────────────
               pw.Container(
                 padding: const pw.EdgeInsets.all(16),
                 decoration: pw.BoxDecoration(
@@ -207,8 +199,6 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
                   ],
                 ),
               ),
-
-              // ── Observaciones ────────────────────────────────────────────
               if (obs.isNotEmpty) ...[
                 pw.SizedBox(height: 16),
                 pw.Text('Observaciones:',
@@ -223,8 +213,6 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
                       style: pw.TextStyle(font: font, fontSize: 13)),
                 ),
               ],
-
-              // ── Recomendacion IA ─────────────────────────────────────────
               if (reco.isNotEmpty) ...[
                 pw.SizedBox(height: 18),
                 pw.Container(
@@ -250,7 +238,6 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
                   ),
                 ),
               ],
-
               pw.Spacer(),
               pw.Divider(color: PdfColors.grey300),
               pw.SizedBox(height: 5),
@@ -306,34 +293,27 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
           _buildDots(size),
           SafeArea(
             child: Column(
-  children: [
-    _buildAppBar(),
-
-    ///  TODO lo demás dentro de UN SOLO SCROLL
-    Expanded(
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 40),
-        children: [
-          _buildSearchBar(),
-          const SizedBox(height: 8),
-
-          _buildChildrenSelector(userId),
-          const SizedBox(height: 8),
-
-          _buildFilters(),
-
-          /// ✅ YA NO EMPUJA
-          _buildWeeklySummary(userId),
-
-          const SizedBox(height: 10),
-
-          /// ✅ TODAS las cards quedan alineadas
-          _buildReportsList(userId),
-        ],
-      ),
-    ),
-  ],
-),
+              children: [
+                _buildAppBar(),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [
+                      _buildSearchBar(),
+                      const SizedBox(height: 8),
+                      _buildFilters(),
+                      const SizedBox(height: 8),
+                      // Selector de niños: deshabilitado cuando mostrarTodos = true
+                      _buildChildrenSelector(userId),
+                      const SizedBox(height: 8),
+                      _buildWeeklySummary(userId),
+                      const SizedBox(height: 10),
+                      _buildReportsList(userId),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -393,7 +373,6 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
           ),
           child: Row(
             children: [
-             
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -405,11 +384,13 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
                             fontSize: 17,
                             fontWeight: FontWeight.w900,
                             color: _dark)),
-                    Text(selectedChildName,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _dark.withOpacity(0.55))),
+                    Text(
+                      mostrarTodos ? 'Todos los niños' : selectedChildName,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _dark.withOpacity(0.55)),
+                    ),
                   ],
                 ),
               ),
@@ -483,76 +464,9 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
         ),
       );
 
-  // ─── SELECTOR NIÑOS ───────────────────────────────────────────────────────
-  Widget _buildChildrenSelector(String userId) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('children')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox(height: 46);
-        final kids   = snapshot.data!.docs;
-        final colors = [_purple, _pink, _green, _blue, _orange];
-
-        return SizedBox(
-          height: 46,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: kids.length,
-            itemBuilder: (context, i) {
-              final kid  = kids[i].data() as Map<String, dynamic>;
-              final id   = kids[i].id;
-              final name = kid['name'] ?? kid['nombre'] ?? 'Hijo';
-              final sel  = selectedChildId == id;
-              final Color c = colors[i % colors.length];
-
-              return GestureDetector(
-                onTap: () => setState(() {
-                  selectedChildId   = id;
-                  selectedChildName = name;
-                  // Resetear filtro al cambiar de niño
-                  mostrarTodos = false;
-                }),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: sel
-                        ? c.withOpacity(0.20)
-                        : Colors.white.withOpacity(0.25),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: sel
-                          ? c.withOpacity(0.65)
-                          : Colors.white.withOpacity(0.5),
-                      width: sel ? 2 : 1,
-                    ),
-                  ),
-                  child: Text(name,
-                      style: TextStyle(
-                        color:
-                            sel ? c : _dark.withOpacity(0.7),
-                        fontWeight: sel
-                            ? FontWeight.w900
-                            : FontWeight.w600,
-                        fontSize: 14,
-                      )),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
   // ─── FILTROS ──────────────────────────────────────────────────────────────
   Widget _buildFilters() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -598,14 +512,88 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
     );
   }
 
-  // ─── RESUMEN SEMANAL — SIEMPRE filtrado por niño seleccionado ────────────
+  // ─── SELECTOR NIÑOS ───────────────────────────────────────────────────────
+  // Cuando mostrarTodos = true, los chips se muestran desactivados visualmente
+  // y sin responder a toques.
+  Widget _buildChildrenSelector(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('children')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox(height: 46);
+        final kids   = snapshot.data!.docs;
+        final colors = [_purple, _pink, _green, _blue, _orange];
+
+        return AnimatedOpacity(
+          duration: const Duration(milliseconds: 250),
+          // Desvanece el selector cuando "Todos los niños" está activo
+          opacity: mostrarTodos ? 0.35 : 1.0,
+          child: SizedBox(
+            height: 46,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: kids.length,
+              itemBuilder: (context, i) {
+                final kid  = kids[i].data() as Map<String, dynamic>;
+                final id   = kids[i].id;
+                final name = kid['name'] ?? kid['nombre'] ?? 'Hijo';
+                final sel  = selectedChildId == id && !mostrarTodos;
+                final Color c = colors[i % colors.length];
+
+                return GestureDetector(
+                  // Deshabilita el toque cuando mostrarTodos está activo
+                  onTap: mostrarTodos
+                      ? null
+                      : () => setState(() {
+                            selectedChildId   = id;
+                            selectedChildName = name;
+                          }),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: sel
+                          ? c.withOpacity(0.20)
+                          : Colors.white.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: sel
+                            ? c.withOpacity(0.65)
+                            : Colors.white.withOpacity(0.5),
+                        width: sel ? 2 : 1,
+                      ),
+                    ),
+                    child: Text(name,
+                        style: TextStyle(
+                          color: sel ? c : _dark.withOpacity(0.7),
+                          fontWeight: sel
+                              ? FontWeight.w900
+                              : FontWeight.w600,
+                          fontSize: 14,
+                        )),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── RESUMEN SEMANAL ──────────────────────────────────────────────────────
   Widget _buildWeeklySummary(String userId) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('reports')
-          .where('childId', isEqualTo: selectedChildId) // ← siempre por niño
+          .where('childId', isEqualTo: selectedChildId)
           .orderBy('timestamp', descending: true)
           .limit(14)
           .snapshots(),
@@ -673,89 +661,79 @@ class _StatsPageState extends State<StatsPage> with TickerProviderStateMixin {
     );
   }
 
-Widget _buildBarChart(
-    double cal, double prot, double carbs, double fat) {
+  Widget _buildBarChart(double cal, double prot, double carbs, double fat) {
+    final double maxVal =
+        [cal / 10, prot, carbs, fat].reduce((a, b) => a > b ? a : b);
 
-  final double maxVal =
-      [cal / 10, prot, carbs, fat].reduce((a, b) => a > b ? a : b);
+    if (maxVal == 0) return const SizedBox(height: 100);
 
-  if (maxVal == 0) return const SizedBox(height: 100);
+    final bars = [
+      {'l': 'Kcal/10', 'v': cal / 10, 'c': _pink},
+      {'l': 'Prot(g)', 'v': prot,     'c': _purple},
+      {'l': 'Carb(g)', 'v': carbs,    'c': _blue},
+      {'l': 'Gras(g)', 'v': fat,      'c': _orange},
+    ];
 
-  final bars = [
-    {'l': 'Kcal/10', 'v': cal / 10, 'c': _pink},
-    {'l': 'Prot(g)', 'v': prot,     'c': _purple},
-    {'l': 'Carb(g)', 'v': carbs,    'c': _blue},
-    {'l': 'Gras(g)', 'v': fat,      'c': _orange},
-  ];
+    return SizedBox(
+      height: 120,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: bars.map((b) {
+          final double ratio =
+              ((b['v'] as double) / maxVal).clamp(0.0, 1.0);
+          final Color color = b['c'] as Color;
 
-  return SizedBox(
-    height: 120, // ✅ MÁS ESPACIO (clave)
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: bars.map((b) {
-        final double ratio =
-            ((b['v'] as double) / maxVal).clamp(0.0, 1.0);
-        final Color color = b['c'] as Color;
-
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-
-                /// 🔹 VALOR
-                FittedBox(
-                  child: Text(
-                    '${(b['v'] as double).toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: color,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                /// 🔹 BARRA
-                Expanded( // ✅ ESTO ELIMINA EL OVERFLOW
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOutCubic,
-                      width: 16,
-                      height: (70 * ratio).clamp(6.0, 70.0),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.75),
-                        borderRadius: BorderRadius.circular(8),
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  FittedBox(
+                    child: Text(
+                      '${(b['v'] as double).toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: color,
                       ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 6),
-
-                /// 🔹 LABEL
-                FittedBox(
-                  child: Text(
-                    b['l'] as String,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _dark.withOpacity(0.55),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutCubic,
+                        width: 16,
+                        height: (70 * ratio).clamp(6.0, 70.0),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.75),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  FittedBox(
+                    child: Text(
+                      b['l'] as String,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _dark.withOpacity(0.55),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      }).toList(),
-    ),
-  );
-}
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   Widget _buildRecoCard(String reco) {
     return ClipRRect(
@@ -819,8 +797,6 @@ Widget _buildBarChart(
   }
 
   // ─── LISTA REPORTES ───────────────────────────────────────────────────────
-  // "Recientes" → solo del niño seleccionado
-  // "Todos los niños" → sin filtro de childId
   Widget _buildReportsList(String userId) {
     Query query = FirebaseFirestore.instance
         .collection('users')
@@ -828,7 +804,6 @@ Widget _buildBarChart(
         .collection('reports');
 
     if (!mostrarTodos) {
-      // Filtrar SIEMPRE por el niño seleccionado en el tab "Recientes"
       query = query.where('childId', isEqualTo: selectedChildId);
     }
 
@@ -850,7 +825,6 @@ Widget _buildBarChart(
 
         var docs = snapshot.data!.docs;
 
-        // Búsqueda por nombre si hay texto
         if (searchText.isNotEmpty) {
           docs = docs.where((doc) {
             final d = doc.data() as Map<String, dynamic>;
@@ -862,15 +836,16 @@ Widget _buildBarChart(
         }
 
         if (docs.isEmpty) return _buildEmptyState();
-return Padding(
-  padding: const EdgeInsets.fromLTRB(20, 4, 20, 48),
-  child: Column(
-    children: List.generate(docs.length, (i) {
-      final report = docs[i].data() as Map<String, dynamic>;
-      return _buildReportCard(report, i);
-    }),
-  ),
-);
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 48),
+          child: Column(
+            children: List.generate(docs.length, (i) {
+              final report = docs[i].data() as Map<String, dynamic>;
+              return _buildReportCard(report, i);
+            }),
+          ),
+        );
       },
     );
   }
@@ -885,7 +860,6 @@ return Padding(
     final String reco   = report['recommendation'] ?? '';
     final int    water  = (report['waterGlasses']  ?? 0) as int;
 
-    // Usar IconData en lugar de emoji para evitar advertencias de fuente
     final mealIcon = {
       'Desayuno': Icons.wb_sunny_rounded,
       'Comida':   Icons.restaurant_rounded,
@@ -899,7 +873,7 @@ return Padding(
     return GestureDetector(
       onTap: () => _abrirPDF(report),
       child: Container(
-        width: double.infinity, 
+        width: double.infinity,
         margin: const EdgeInsets.only(bottom: 14),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(22),
@@ -916,7 +890,6 @@ return Padding(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
                   Row(
                     children: [
                       Container(
@@ -948,7 +921,6 @@ return Padding(
                           ],
                         ),
                       ),
-                      // Botón PDF
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -975,8 +947,6 @@ return Padding(
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // Macros
                   Wrap(
                     spacing: 7, runSpacing: 6,
                     children: [
@@ -986,8 +956,6 @@ return Padding(
                       if (water > 0) _miniBadge('Agua: $water', _blue),
                     ],
                   ),
-
-                  // Chips alimentos
                   if (foods.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Wrap(
@@ -1009,8 +977,6 @@ return Padding(
                           )).toList(),
                     ),
                   ],
-
-                  // Preview recomendación
                   if (reco.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Container(
@@ -1152,24 +1118,6 @@ return Padding(
                 color: Colors.white.withOpacity(0.55), width: 1.2),
           ),
           child: child,
-        ),
-      ),
-    );
-  }
-
-  Widget _glassCircle({required Widget child}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.28),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(0.55)),
-          ),
-          child: Center(child: child),
         ),
       ),
     );
