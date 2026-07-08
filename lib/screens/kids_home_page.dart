@@ -5,11 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'profile_selection_page.dart';
-import 'memory_game_page.dart';
-import 'classify_game_page.dart';
-import 'quiz_game_page.dart';
+import 'memoria_nutricional_screen.dart';
+import 'clasifica_alimentos_screen.dart';
 import 'garden_game_page.dart';
-
+import 'quiz_game_page.dart';
 class KidsHomePage extends StatefulWidget {
   final String kidName;
   const KidsHomePage({super.key, required this.kidName});
@@ -213,40 +212,49 @@ class _KidsHomePageState extends State<KidsHomePage>
         ),
         const SizedBox(width: 10),
 
-        // Logo
-        Image.asset(
-          'assets/starnutri2.png',
-          height: 36,
-          errorBuilder: (_, __, ___) =>
-              const Text('🌟', style: TextStyle(fontSize: 28)),
+        // Logo (Flexible so it shrinks on narrow screens instead of overflowing)
+        Flexible(
+          child: Image.asset(
+            'assets/starnutri2.png',
+            height: 36,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) =>
+                const Text('🌟', style: TextStyle(fontSize: 28)),
+          ),
         ),
         const Spacer(),
 
-        // Puntos badge
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.55)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('⭐', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 5),
-                  Text(
-                    '$_totalPoints pts',
-                    style: GoogleFonts.nunito(
-                      fontWeight: FontWeight.w900, fontSize: 15,
-                      color: const Color(0xFFFF8C42),
+        // Puntos badge (Flexible + ellipsis so long point counts never overflow)
+        Flexible(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.55)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('⭐', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        '$_totalPoints pts',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: GoogleFonts.nunito(
+                          fontWeight: FontWeight.w900, fontSize: 15,
+                          color: const Color(0xFFFF8C42),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -425,7 +433,7 @@ class _KidsHomePageState extends State<KidsHomePage>
         'points': '+15 pts',
         'desc':   'Encuentra las parejas',
         'color':  const Color(0xFFFF6BA1),
-        'page':   MemoryGamePage(kidName: widget.kidName, userId: userId),
+        'page':   const MemoriaNutricionalScreen(),
       },
       {
         'title':  'Clasifica\nAlimentos',
@@ -433,7 +441,7 @@ class _KidsHomePageState extends State<KidsHomePage>
         'points': '+20 pts',
         'desc':   'Arrastra y clasifica',
         'color':  const Color(0xFF7C3AED),
-        'page':   ClassifyGamePage(kidName: widget.kidName, userId: userId),
+        'page':   const ClasificaAlimentosScreen(),
       },
       {
         'title':  'Quiz\nNutricional',
@@ -444,10 +452,10 @@ class _KidsHomePageState extends State<KidsHomePage>
         'page':   QuizGamePage(kidName: widget.kidName, userId: userId),
       },
       {
-        'title':  'Jardín\nSaludable',
+        'title':  'Sopa de \nLetras',
         'emoji':  '🌱',
         'points': '+30 pts',
-        'desc':   'Cultiva tus plantas',
+        'desc':   'Encuentra la palabra',
         'color':  const Color(0xFF4ECB71),
         'page':   GardenGamePage(kidName: widget.kidName, userId: userId),
       },
@@ -459,7 +467,9 @@ class _KidsHomePageState extends State<KidsHomePage>
       crossAxisCount: 2,
       mainAxisSpacing: 14,
       crossAxisSpacing: 14,
-      childAspectRatio: 0.90,
+      // Taller cells so emoji + 2-line title + desc + badge always fit,
+      // even on narrow screens.
+      childAspectRatio: 0.72,
       children: games.map((g) {
         final Color color = g['color'] as Color;
         return GestureDetector(
@@ -475,7 +485,7 @@ class _KidsHomePageState extends State<KidsHomePage>
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(24),
@@ -483,26 +493,31 @@ class _KidsHomePageState extends State<KidsHomePage>
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(g['emoji'] as String,
-                        style: const TextStyle(fontSize: 40)),
-                    const Spacer(),
+                        style: const TextStyle(fontSize: 34)),
+                    const SizedBox(height: 8),
                     Text(
                       g['title'] as String,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.nunito(
-                        fontWeight: FontWeight.w900, fontSize: 16,
-                        color: const Color(0xFF1A0A36), height: 1.2,
+                        fontWeight: FontWeight.w900, fontSize: 15,
+                        color: const Color(0xFF1A0A36), height: 1.15,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       g['desc'] as String,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: const Color(0xFF3C2864).withOpacity(0.6),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(

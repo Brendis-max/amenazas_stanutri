@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+echo "" >> .gitignore
+echo "# Firebase secrets (NUNCA subir)" >> .gitignore
+echo "starnutri_ml/firebase-credentials.json" >> .gitignore
+echo "starnutri_ml/response_1780468030545.json" >> .gitignore

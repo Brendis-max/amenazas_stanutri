@@ -89,7 +89,22 @@ flutter:
   - assets/starnutri2.png
   - assets/starnutrikids.png
   - assets/splash.png
-   
+  
+  - assets/cards/cherry.png
+  - assets/cards/kiwi.png
+  - assets/cards/fresa.png
+  - assets/cards/peach.png
+  - assets/cards/pear.png
+  - assets/cards/blueberry.png
+  - assets/cards/lemon.png
+  - assets/cards/orange.png
+  - assets/cards/papaya.png
+  - assets/cards/uva.png
+  - assets/cards/banana.png
+  - assets/cards/pina.png
+  - assets/cards/watermelon.png
+  - assets/cards/mango.png
+  - assets/cards/card_back.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

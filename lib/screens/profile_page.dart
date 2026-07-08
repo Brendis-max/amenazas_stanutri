@@ -523,7 +523,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                   crossAxisCount: 2,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 1.05,
+                  // Celdas más altas: el contenido de _kidCard (botón
+                  // cerrar + avatar + nombre + edad + padding) necesitaba
+                  // más alto del que daba 1.05 en pantallas angostas.
+                  childAspectRatio: 0.82,
                 ),
                 itemCount: kids.length,
                 itemBuilder: (context, i) {
@@ -701,17 +704,18 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     required Color color,
   }) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: color.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(color: color.withOpacity(0.35), width: 1.2),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Align(
@@ -724,36 +728,38 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       .doc(docId)
                       .delete(),
                   child: Container(
-                    width: 26, height: 26,
+                    width: 22, height: 22,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.35),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.close_rounded, size: 14, color: color),
+                    child: Icon(Icons.close_rounded, size: 13, color: color),
                   ),
                 ),
               ),
+              const SizedBox(height: 2),
               Container(
-                width: 46, height: 46,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.20),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.child_care_rounded, color: color, size: 24),
+                child: Icon(Icons.child_care_rounded, color: color, size: 21),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w900, fontSize: 15, color: _dark),
+                    fontWeight: FontWeight.w900, fontSize: 13, color: _dark),
                 textAlign: TextAlign.center,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 '$age años',
                 style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: _dark.withOpacity(0.55),
                     fontWeight: FontWeight.w600),
               ),

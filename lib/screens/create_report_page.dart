@@ -213,6 +213,12 @@ class _CreateReportPageState extends State<CreateReportPage>
           .collection('children').doc(widget.childId)
           .update({'progreso_hoy': FieldValue.increment(w * 20.0)});
 
+      await _nutritionService.predictRisk(
+        userId:    userId,
+        childId:   widget.childId,
+        childName: widget.childName,
+        childAge:  age,
+      );
       await _generarPDF(reportData, recommendation, age);
 
       if (!mounted) return;

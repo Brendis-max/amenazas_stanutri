@@ -1,14 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// ─── CREDENCIALES GEMINI (Google AI Studio — GRATIS) ─────────────────────
 const String _geminiApiKey = 'AIzaSyAbtPSNeyhDR5iUZ0Z7cDAVOUpm7rPNj_A';
-
-/// ─── URL DE TU API DE MACHINE LEARNING (Railway) ──────────────────────────
-/// Cambia esto por la URL real que te da Railway al desplegar starnutri_ml.
-const String _mlApiBaseUrl = 'https://TU-PROYECTO.up.railway.app';
 
 /// ─── MODELO DE ALIMENTO ───────────────────────────────────────────────────
 class FoodItem {  
@@ -185,100 +180,6 @@ class NutritionService {
     }
 
     return results;
-  }
-
-  // ── EVALUAR RIESGO NUTRICIONAL CON EL MODELO ML (starnutri_ml) ──────────
-  /// Agrega los reportes reales guardados de `childId` en los últimos
-  /// [windowDays] días, arma las mismas 8 features que usó el entrenamiento
-  /// (train.py) y llama a la API de Railway. El resultado lo guarda tu API
-  /// directamente en Firestore (users/{userId}/predicciones), así que aquí
-  /// no hace falta hacer nada con la respuesta.
-  ///
-  /// No lanza excepciones hacia arriba: si falla, no debe romper el flujo
-  /// de "guardar reporte" que el usuario ya completó.
-  Future<void> predictRisk({
-    required String userId,
-    required String childId,
-    required String childName,
-    required int childAge,
-    int windowDays = 14,
-  }) async {
-    try {
-      final since = DateTime.now().subtract(Duration(days: windowDays));
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users').doc(userId)
-          .collection('reports')
-          .where('childId', isEqualTo: childId)
-          .get();
-
-      // Agrupa por día: "YYYY-M-D" -> acumulados de ese día
-      final Map<String, Map<String, double>> daily = {};
-      int totalReports = 0;
-
-      for (final doc in snapshot.docs) {
-        final d = doc.data();
-        final ts = d['timestamp'];
-        if (ts is! Timestamp) continue;
-
-        final date = ts.toDate();
-        if (date.isBefore(since)) continue;
-
-        final dayKey = '${date.year}-${date.month}-${date.day}';
-        totalReports++;
-
-        final bucket = daily.putIfAbsent(dayKey, () => {
-          'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0, 'water': 0,
-        });
-        bucket['calories'] = bucket['calories']! + _numToDouble(d['totalCalories']);
-        bucket['protein']  = bucket['protein']!  + _numToDouble(d['totalProtein']);
-        bucket['carbs']    = bucket['carbs']!    + _numToDouble(d['totalCarbs']);
-        bucket['fat']      = bucket['fat']!      + _numToDouble(d['totalFat']);
-
-        final water = _numToDouble(d['waterGlasses']);
-        if (water > bucket['water']!) bucket['water'] = water; // acumulado del día, no se suma
-      }
-
-      if (daily.isEmpty) return; // aún no hay suficientes reportes para evaluar
-
-      final daysTracked = daily.length;
-      double avgOf(String key) =>
-          daily.values.map((v) => v[key]!).reduce((a, b) => a + b) / daysTracked;
-
-      final body = {
-        'user_id':      userId,
-        'child_id':     childId,
-        'child_name':   childName,
-        'age':          childAge.toDouble(),
-        'avg_calories': avgOf('calories'),
-        'avg_protein':  avgOf('protein'),
-        'avg_carbs':    avgOf('carbs'),
-        'avg_fat':      avgOf('fat'),
-        'avg_water':    avgOf('water'),
-        'meals':        totalReports.toDouble(),
-        'days_tracked': daysTracked.toDouble(),
-      };
-
-      final res = await http.post(
-        Uri.parse('$_mlApiBaseUrl/predict'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 15));
-
-      if (res.statusCode != 200) {
-        // ignore: avoid_print
-        print('predictRisk: ${res.statusCode} ${res.body}');
-      }
-    } catch (e) {
-      // ignore: avoid_print
-      print('predictRisk error: $e');
-    }
-  }
-
-  double _numToDouble(dynamic v) {
-    if (v == null) return 0.0;
-    if (v is num) return v.toDouble();
-    return double.tryParse(v.toString()) ?? 0.0;
   }
 
   // ── GENERAR RECOMENDACIÓN CON GEMINI 1.5 FLASH ──────────────────────────
@@ -510,5 +411,203 @@ Responde directo, sin saludos ni "Hola".
     if (age <= 11) return 1600;
     if (age <= 13) return 1800;
     return 2000;
+  }
+}
+
+
+
+requirements.txt
+
+
+fastapi==0.115.0
+uvicorn==0.30.6
+scikit-learn==1.8.0
+xgboost==2.1.1
+numpy==2.1.3
+pandas==2.2.3
+joblib==1.4.2
+pydantic==2.9.2
+matplotlib==3.9.2
+seaborn==0.13.2
+firebase-admin==6.5.0
+
+## main.py
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import joblib
+import json
+import time
+import os
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+app = FastAPI(title="StarNutri ML API")
+
+# ── CONEXIÓN A FIREBASE ────────────────────────────────────────
+# El código busca el archivo local o las variables de Railway
+try:
+    if not firebase_admin._apps:
+        if os.path.exists("firebase-credentials.json"):
+            # Modo Local: Usa el archivo JSON que descargaste
+            cred = credentials.Certificate("firebase-credentials.json")
+            firebase_admin.initialize_app(cred)
+            print("🚀 Conectado a Firebase en modo Local")
+        else:
+            # Modo Producción (Railway): Usa variables de entorno
+            cred = credentials.Certificate({
+                "type": "service_account",
+                "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+                "private_key": os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n'),
+                "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+            })
+            firebase_admin.initialize_app(cred)
+            print("☁️ Conectado a Firebase en modo Railway")
+except Exception as e:
+    print(f"⚠️ Alerta Firebase: {e}")
+
+# Instancia activa de Firestore
+db = firestore.client() if firebase_admin._apps else None
+
+model = None
+le = None
+metrics_cache = {}
+
+# ── MODELO DE ENTRADA CON USER_ID ADICIONAL ─────────────────────
+class PredictionInput(BaseModel):
+    user_id: str  # <── Necesario para saber en qué carpeta de Firestore guardarlo
+    age: float
+    avg_calories: float
+    avg_protein: float
+    avg_carbs: float
+    avg_fat: float
+    avg_water: float
+    meals: float
+    days_tracked: float
+
+# ── STARTUP ────────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup_event():
+    global model, le, metrics_cache
+    with open("models/metrics.json") as f:
+        all_metrics = json.load(f)
+    best_name = all_metrics["best_model"]
+    fname = (
+        best_name.lower()
+        .replace(" ", "_")
+        .replace("(", "")
+        .replace(")", "")
+    )
+    model = joblib.load(f"models/{fname}.pkl")
+    le = joblib.load("models/label_encoder.pkl")
+    metrics_cache = all_metrics
+    print(f"✅ Modelo cargado con éxito: {best_name}")
+
+# ── ENDPOINTS ──────────────────────────────────────────────────
+@app.get("/")
+def home():
+    return {"message": "StarNutri ML API funcionando y lista para Firebase ✅"}
+
+@app.get("/metrics")
+def get_metrics():
+    return metrics_cache
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "database_connected": db is not None}
+
+@app.post("/predict")
+def predict(data: PredictionInput):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Modelo no cargado")
+
+    features = [[
+        data.age, data.avg_calories, data.avg_protein, data.avg_carbs,
+        data.avg_fat, data.avg_water, data.meals, data.days_tracked
+    ]]
+
+    # Medición del tiempo de ejecución
+    start = time.time()
+    prediction_encoded = model.predict(features)[0]
+    elapsed_ms = round((time.time() - start) * 1000, 2)
+
+    label = le.inverse_transform([prediction_encoded])[0]
+
+    # Estructura del resultado final
+    result = {
+        "prediccion": str(label),
+        "riesgo_nutricional": str(label).upper(),
+        "tiempo_ms": elapsed_ms,
+        "modelo_usado": metrics_cache.get("best_model", "desconocido"),
+        "timestamp": firestore.SERVER_TIMESTAMP if db else time.time(),
+        "input": {k: v for k, v in data.dict().items() if k != 'user_id'}
+    }
+
+    # ── PERSISTENCIA REAL EN FIREBASE ───────────────────────────
+    if db:
+        try:
+            # Guarda el resultado en: usuarios -> {user_id} -> predicciones -> {documento_aleatorio}
+            ref = db.collection("usuarios").document(data.user_id).collection("predicciones").document()
+            ref.set(result)
+            
+            return {
+                "id_documento_firestore": ref.id,
+                "status": "Guardado exitosamente en la nube (Firebase)",
+                "tiempo_ejecucion": f"{elapsed_ms} ms",
+                "resultado": label
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error al escribir en Firestore: {e}")
+    else:
+        raise HTTPException(status_code=500, detail="Servicio de base de datos no disponible")
+
+
+
+        rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. PERFIL DEL PADRE
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 2. PERFILES DE NIÑOS
+    match /users/{userId}/children/{childId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 3. REPORTES NUTRICIONALES
+    match /users/{userId}/reports/{reportId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+		// 3.5 PREDICCIONES DEL MODELO ML (starnutri_ml / main.py)
+		match /users/{userId}/predicciones/{prediccionId} {
+  		allow read: if request.auth != null && request.auth.uid == userId;
+ 		 		allow write: if false; // solo el backend (Admin SDK) escribe aquí
+		}
+  
+    // 4. PUNTOS DE LOS NIÑOS (juegos)
+    match /users/{userId}/kids_points/{kidName} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 5. PDFs
+    match /users/{userId}/pdfs/{pdfId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 6. FORMULARIO DE CONTACTO (landing page)
+    match /contacto/{docId} {
+      allow create: if true;
+      allow read: if request.auth != null;
+    }
+
+    // 7. BLOQUEAR TODO LO DEMÁS
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
   }
 }
